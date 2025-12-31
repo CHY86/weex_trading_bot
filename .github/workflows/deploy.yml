@@ -16,29 +16,39 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          # [修正1] 增加超時時間到 10 分鐘，避免 apt 安裝太久被殺掉
-          timeout: 600s
+          timeout: 60s
           script: |
-            # 1. 安裝必要工具: screen 和 at
-            # at 是一個排程工具，能讓程式完全脫離 SSH 控制
-            sudo apt-get update
-            sudo apt-get install -y screen at
-
-            # 2. 進入專案資料夾
+            # 1. 進入專案資料夾 & 更新代碼
             cd /home/ubuntu/weex_trading_bot
-            
-            # 3. 更新程式碼
             git pull origin main
             
-            # 4. 清理舊行程
-            pkill -f main.py || true
-            screen -S trading_bot -X quit || true
-            
-            echo "Starting new bot using 'at' scheduler..."
+            # 2. 建立 Systemd 服務設定檔 (如果已存在會覆蓋)
+            # 這裡定義了機器人如何啟動、崩潰後如何重啟
+            sudo bash -c 'cat > /etc/systemd/system/trading_bot.service <<EOF
+            [Unit]
+            Description=Weex AI Trading Bot
+            After=network.target
 
-            # 5. [核彈級解法] 使用 at now 啟動 screen
-            # 這行指令的意思是：「請系統(atd)現在立刻幫我執行這個 screen 指令」
-            # 這樣 SSH 連線就算馬上斷開，程式也絕對不會受影響
-            echo "screen -d -m -S trading_bot bash -c 'python3 main.py > output.log 2>&1'" | at now
-            
-            echo "✅ Deployment signal sent via 'at'. Bot should be running."
+            [Service]
+            Type=simple
+            User=ubuntu
+            WorkingDirectory=/home/ubuntu/weex_trading_bot
+            # 指定 Python 路徑與程式路徑
+            ExecStart=/usr/bin/python3 /home/ubuntu/weex_trading_bot/main.py
+            # 關鍵設定：程式掛掉會自動重啟
+            Restart=always
+            RestartSec=3
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF'
+
+            echo "✅ Systemd service file created."
+
+            # 3. 重新載入設定 & 啟動服務
+            # 這些指令都是「瞬間完成」的，不會卡住 SSH
+            sudo systemctl daemon-reload
+            sudo systemctl enable trading_bot
+            sudo systemctl restart trading_bot
+
+            echo "✅ Bot restarted via Systemd. Disconnecting..."
