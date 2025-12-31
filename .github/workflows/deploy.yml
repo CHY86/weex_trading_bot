@@ -26,9 +26,10 @@ jobs:
             # 3. 停止舊的機器人 (如果有在跑)
             # pkill -f main.py || true 表示如果沒找到行程也不要報錯
             pkill -f main.py || true
-            
+
+                        
             # 4. 啟動新的機器人 (使用 nohup 讓它在背景執行，不隨 SSH 斷線而停止)
             # > output.log 2>&1 代表把輸出存到 log 檔
-            nohup python3 main.py > output.log 2>&1 &
-            
-            echo "✅ Deployment successful! Bot restarted."
+            nohup python3 main.py > output.log 2>&1 < /dev/null &
+            sleep 2
+            echo "✅ Deployment complete"
