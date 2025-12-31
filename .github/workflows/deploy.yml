@@ -16,29 +16,32 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          # 不需要增加 timeout，因為 screen 會瞬間完成
+          # 增加 timeout 防止極端狀況，但主要靠 sleep 解決
+          timeout: 30s
           script: |
-            # 1. 確保系統有 screen 工具 (沒有的話自動安裝)
+            # 1. 確保 screen 存在
             sudo apt-get update && sudo apt-get install -y screen
 
-            # 2. 進入專案資料夾
+            # 2. 進入資料夾
             cd /home/ubuntu/weex_trading_bot
             
-            # 3. 從 GitHub 拉取最新程式碼
+            # 3. 更新代碼
             git pull origin main
             
-            # 4. 強制停止舊的機器人 (防止重複執行)
-            # 先殺掉 Python 行程
+            # 4. 清理舊行程
             pkill -f main.py || true
-            # 清除舊的 screen session
             screen -S trading_bot -X quit || true
             
-            echo "Old bot stopped. Starting new bot..."
+            echo "Starting new bot..."
 
-            # 5. 使用 screen 啟動新機器人 [核心解法]
-            # -d -m : 啟動後立即「脫離 (Detach)」，讓 GitHub Action 不會卡住
-            # -S trading_bot : 幫這個視窗取名，方便管理
-            # bash -c : 執行 Python 並將 Log 寫入檔案
+            # 5. 啟動機器人
+            # 使用 screen 啟動
             screen -d -m -S trading_bot bash -c "python3 main.py > output.log 2>&1"
             
-            echo "✅ Deployment successful! Bot is running in screen session 'trading_bot'."
+            # [關鍵修正]：
+            # 讓腳本暫停 5 秒，確保 screen 有足夠時間完成 Detach (脫離)
+            # 這樣 SSH 才會認為「喔，真的沒事做了」，然後正常關閉
+            sleep 5
+            
+            echo "✅ Deployment successful!"
+            exit 0
