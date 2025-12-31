@@ -22,8 +22,16 @@ jobs:
             cd /home/ubuntu/weex_trading_bot
             git pull origin main
             
-            # 2. 建立 Systemd 服務設定檔 (如果已存在會覆蓋)
-            # 這裡定義了機器人如何啟動、崩潰後如何重啟
+            # 2. [新增步驟] 安裝 Python 套件管理工具 pip
+            sudo apt-get update
+            sudo apt-get install -y python3-pip
+
+            # 3. [關鍵修復] 安裝缺少的 Python 套件
+            # 注意：必須安裝 'websocket-client' (而不是 websocket)
+            # --break-system-packages 是為了繞過 Ubuntu 的保護機制
+            sudo pip3 install requests websocket-client --break-system-packages
+
+            # 4. 建立 Systemd 服務設定檔
             sudo bash -c 'cat > /etc/systemd/system/trading_bot.service <<EOF
             [Unit]
             Description=Weex AI Trading Bot
@@ -33,9 +41,7 @@ jobs:
             Type=simple
             User=ubuntu
             WorkingDirectory=/home/ubuntu/weex_trading_bot
-            # 指定 Python 路徑與程式路徑
             ExecStart=/usr/bin/python3 /home/ubuntu/weex_trading_bot/main.py
-            # 關鍵設定：程式掛掉會自動重啟
             Restart=always
             RestartSec=3
 
@@ -45,10 +51,9 @@ jobs:
 
             echo "✅ Systemd service file created."
 
-            # 3. 重新載入設定 & 啟動服務
-            # 這些指令都是「瞬間完成」的，不會卡住 SSH
+            # 5. 重新載入設定 & 啟動服務
             sudo systemctl daemon-reload
             sudo systemctl enable trading_bot
             sudo systemctl restart trading_bot
 
-            echo "✅ Bot restarted via Systemd. Disconnecting..."
+            echo "✅ Bot restarted via Systemd with dependencies installed."
