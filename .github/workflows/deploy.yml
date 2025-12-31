@@ -1,0 +1,34 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main  # 當推送到 main 分支時觸發
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy code via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            # 1. 進入專案資料夾
+            cd /home/ubuntu/weex_trading_bot
+            
+            # 2. 拉取最新程式碼
+            git pull origin main
+            
+            # 3. 停止舊的機器人 (如果有在跑)
+            # pkill -f main.py || true 表示如果沒找到行程也不要報錯
+            pkill -f main.py || true
+            
+            # 4. 啟動新的機器人 (使用 nohup 讓它在背景執行，不隨 SSH 斷線而停止)
+            # > output.log 2>&1 代表把輸出存到 log 檔
+            nohup python3 main.py > output.log 2>&1 &
+            
+            echo "✅ Deployment successful! Bot restarted."
