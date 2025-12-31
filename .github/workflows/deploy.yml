@@ -16,22 +16,27 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          timeout: 60s
+          timeout: 120s
           script: |
-            # 1. 進入專案資料夾 & 更新代碼
+            # 1. 安裝系統級依賴 (只需要 venv 工具，不需要 pip)
+            sudo apt-get update
+            sudo apt-get install -y python3-venv
+
+            # 2. 進入專案資料夾 & 更新代碼
             cd /home/ubuntu/weex_trading_bot
             git pull origin main
             
-            # 2. [新增步驟] 安裝 Python 套件管理工具 pip
-            sudo apt-get update
-            sudo apt-get install -y python3-pip
+            # 3. [優化] 檢查並建立虛擬環境 (如果不存在的話)
+            if [ ! -d "venv" ]; then
+                python3 -m venv venv
+                echo "✅ Virtual environment created."
+            fi
 
-            # 3. [關鍵修復] 安裝缺少的 Python 套件
-            # 注意：必須安裝 'websocket-client' (而不是 websocket)
-            # --break-system-packages 是為了繞過 Ubuntu 的保護機制
-            sudo pip3 install requests websocket-client --break-system-packages
+            # 4. [優化] 安裝 Python 依賴套件 (安裝到虛擬環境中)
+            # 注意：這裡使用的是 ./venv/bin/pip，不需要 sudo，也不會汙染系統
+            ./venv/bin/pip install -r requirements.txt
 
-            # 4. 建立 Systemd 服務設定檔
+            # 5. 建立 Systemd 服務設定檔
             sudo bash -c 'cat > /etc/systemd/system/trading_bot.service <<EOF
             [Unit]
             Description=Weex AI Trading Bot
@@ -41,7 +46,11 @@ jobs:
             Type=simple
             User=ubuntu
             WorkingDirectory=/home/ubuntu/weex_trading_bot
-            ExecStart=/usr/bin/python3 /home/ubuntu/weex_trading_bot/main.py
+            
+            # [關鍵修改] 指向虛擬環境內的 Python 執行檔
+            # 這樣執行時，程式就會自動抓到 venv 裡面的 requests 和 websocket-client
+            ExecStart=/home/ubuntu/weex_trading_bot/venv/bin/python /home/ubuntu/weex_trading_bot/main.py
+            
             Restart=always
             RestartSec=3
 
@@ -49,11 +58,11 @@ jobs:
             WantedBy=multi-user.target
             EOF'
 
-            echo "✅ Systemd service file created."
+            echo "✅ Systemd service file updated to use venv."
 
-            # 5. 重新載入設定 & 啟動服務
+            # 6. 重新載入設定 & 啟動服務
             sudo systemctl daemon-reload
             sudo systemctl enable trading_bot
             sudo systemctl restart trading_bot
 
-            echo "✅ Bot restarted via Systemd with dependencies installed."
+            echo "✅ Bot restarted successfully using Virtual Environment."
