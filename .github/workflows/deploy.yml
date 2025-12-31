@@ -16,32 +16,29 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          # 增加 timeout 防止極端狀況，但主要靠 sleep 解決
-          timeout: 30s
+          # [修正1] 增加超時時間到 10 分鐘，避免 apt 安裝太久被殺掉
+          timeout: 600s
           script: |
-            # 1. 確保 screen 存在
-            sudo apt-get update && sudo apt-get install -y screen
+            # 1. 安裝必要工具: screen 和 at
+            # at 是一個排程工具，能讓程式完全脫離 SSH 控制
+            sudo apt-get update
+            sudo apt-get install -y screen at
 
-            # 2. 進入資料夾
+            # 2. 進入專案資料夾
             cd /home/ubuntu/weex_trading_bot
             
-            # 3. 更新代碼
+            # 3. 更新程式碼
             git pull origin main
             
             # 4. 清理舊行程
             pkill -f main.py || true
             screen -S trading_bot -X quit || true
             
-            echo "Starting new bot..."
+            echo "Starting new bot using 'at' scheduler..."
 
-            # 5. 啟動機器人
-            # 使用 screen 啟動
-            screen -d -m -S trading_bot bash -c "python3 main.py > output.log 2>&1"
+            # 5. [核彈級解法] 使用 at now 啟動 screen
+            # 這行指令的意思是：「請系統(atd)現在立刻幫我執行這個 screen 指令」
+            # 這樣 SSH 連線就算馬上斷開，程式也絕對不會受影響
+            echo "screen -d -m -S trading_bot bash -c 'python3 main.py > output.log 2>&1'" | at now
             
-            # [關鍵修正]：
-            # 讓腳本暫停 5 秒，確保 screen 有足夠時間完成 Detach (脫離)
-            # 這樣 SSH 才會認為「喔，真的沒事做了」，然後正常關閉
-            sleep 5
-            
-            echo "✅ Deployment successful!"
-            exit 0
+            echo "✅ Deployment signal sent via 'at'. Bot should be running."
