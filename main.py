@@ -1,4 +1,5 @@
 import time
+from ai_logger import save_local_log
 import config
 from exchange_client import WeexClient
 from market_stream import MarketStream
@@ -10,6 +11,21 @@ client = WeexClient()
 def ai_strategy(current_price):
     print(f"📊 [AI 監控中] 當前價格: {current_price}")
     client.get_account_assets()
+    save_local_log(
+        stage="Signal Generation",
+        model="TestModel",
+        input_data={"price": current_price},
+        output_data={"decision": "BUY"},
+        explanation="Test log entry without order ID."
+    )
+    save_local_log(
+        stage="Signal Generation",
+        model="TestModel",
+        input_data={"price": current_price},
+        output_data={"decision": "BUY"},
+        explanation="Test log entry without order ID.",
+        order_id="test-order-12345"
+    )
     # # 1. 準備 AI 的輸入資料
     # ai_input = {
     #     "price": current_price,
