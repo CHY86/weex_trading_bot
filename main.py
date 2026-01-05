@@ -17,7 +17,7 @@ def ai_strategy(current_price):
         "query": "Should I buy BTC now?"
     }
     
-    # 2. 假設這是 AI 的思考過程 (這裡是模擬，實際上是您的 AI 模型輸出)
+    # 2. 假設這是 AI 的思考過程
     # 實戰中這裡會是: ai_response = my_ai_model.predict(ai_input)
     ai_model_name = "DeepSeek-V3" # 或 GPT-4
     ai_output = {
@@ -38,26 +38,40 @@ def ai_strategy(current_price):
         )
 
         # 4. 執行下單
-        # 注意：我們使用融合版 place_order，並接收回傳結果以取得 order_id
         order_result = client.place_order(
             side=1,           # 開多
             size="0.01", 
             match_price="1"   # 市價單
         )
         
-        # 5. --- [關鍵步驟 B] 下單成功後，補上帶有 Order ID 的 Log (證明這筆單是 AI 下的) ---
-        if order_result and "data" in order_result and "orderId" in order_result["data"]:
-            order_id = order_result["data"]["orderId"]
+        # [除錯用] 印出 API 回傳結果，確認結構
+        print(f"📝 下單 API 回傳: {order_result}")
+
+        # 5. --- [關鍵步驟 B] 下單成功後，補上帶有 Order ID 的 Log ---
+        current_order_id = None
+
+        if order_result:
+            # 情況 A: 標準 WEEX 結構 {"data": {"order_id": "..."}}
+            if "data" in order_result and isinstance(order_result["data"], dict):
+                current_order_id = order_result["data"].get("order_id") or order_result["data"].get("orderId")
+            
+            # 情況 B: 扁平結構 {"order_id": "..."}
+            elif "order_id" in order_result:
+                current_order_id = order_result["order_id"]
+        
+        if current_order_id:
+            print(f"✅ 取得訂單 ID: {current_order_id}，正在關聯 AI Log...")
             
             client.upload_ai_log(
                 stage="Order Execution",
                 model=ai_model_name,
                 input_data={"signal": "BUY", "market_price": current_price},
-                output_data=order_result, # 把下單結果當作輸出
+                output_data=order_result,
                 explanation="Executed market buy order based on AI signal.",
-                order_id=order_id  # 👈 這裡帶入 Order ID 是合規關鍵
+                order_id=current_order_id  # 傳入修正後的 ID
             )
-            print(f"✅ 訂單 {order_id} 已關聯 AI Log")
+        else:
+            print("⚠️ 下單可能失敗或無法取得 Order ID，未上傳關聯 Log")
 
 
 # --- 主程式進入點 ---
