@@ -95,28 +95,59 @@ class WeexClient:
         """查詢當前掛單"""
         return self._send_request("GET", "/capi/v2/order/current", f"?symbol={config.SYMBOL}")
 
-    def place_order(self, side, size, price=None, order_type="limit"):
+    def place_order(self, side, size, price=None, match_price="0", order_type="0", 
+                    client_oid=None, preset_take_profit=None, preset_stop_loss=None, margin_mode=None, extra_params=None):
         """
         下單核心函數
-        side: 1=開多, 2=平多, 3=開空, 4=平空 (根據 WEEX 定義)
+
+        Args:
+            side (int): 1:開多, 2:開空, 3:平多, 4:平空
+            size (str): 數量
+            price (str): 價格 (限價單必填)
+            match_price (str): '0'=限價(Limit), '1'=市價(Market)
+            order_type (str): 訂單策略 -> '0'=普通, '1'=Post-Only(只做Maker), '2'=FOK(全成或全撤), '3'=IOC(立即成交否則撤銷)
+            client_oid (str, optional): 自訂訂單ID
+            preset_take_profit (str, optional): 止盈價
+            preset_stop_loss (str, optional): 止損價
+            margin_mode (int, optional): 1=全倉, 3=逐倉
+            extra_params (dict, optional): 其他進階參數
         """
         endpoint = "/capi/v2/order/placeOrder"
-        
-        # 根據 WEEX 定義: 0=Limit(限價), 1=Market(市價)
-        # 注意: 這裡簡化邏輯，你可能需要根據文件微調 type 定義
-        o_type = "0" if order_type == "limit" else "1"
-        
+
+        # 1. 產生或使用外部傳入的 ID
+        client_oid = client_oid or self.id_gen.generate()
+
+        # 2. 防呆檢查：限價單必須有價格
+        # match_price 為 "0" 代表限價單
+        if str(match_price) == "0" and not price:
+            raise ValueError("❌ 錯誤: 限價單 (match_price='0') 必須輸入價格 (price)")
+
+        # 3. 建構 Payload
         body = {
             "symbol": config.SYMBOL,
-            "client_oid": self.id_gen.generate(),
+            "client_oid": str(client_oid),
             "size": str(size),
-            "type": str(side), 
-            "order_type": o_type, 
-            "match_price": "1", # 1: 只做 Maker (視需求調整)
-            "price": str(price) if price else ""
+            "type": str(side),
+            "order_type": str(order_type),   # 控制 FOK/IOC
+            "match_price": str(match_price), # 控制 Limit/Market
         }
+
+        if price:
+            body["price"] = str(price)
         
-        print(f"🚀 正在下單: {side} | 數量: {size} | 價格: {price}")
+        # 4. 處理選填參數 (轉為 API 格式 key)
+        if preset_take_profit:
+            body["presetTakeProfitPrice"] = str(preset_take_profit)
+        if preset_stop_loss:
+            body["presetStopLossPrice"] = str(preset_stop_loss)
+        if margin_mode:
+            body["marginMode"] = int(margin_mode)
+
+        # 5. 合併額外參數
+        if extra_params and isinstance(extra_params, dict):
+            body.update(extra_params)
+
+        print(f"🚀 下單: 方向={side} | 數量={size} | 價格={price} | 模式={match_price}")
         return self._send_request("POST", endpoint, body_dict=body)
 
     def cancel_all_orders(self):

@@ -18,12 +18,16 @@ def ai_strategy(current_price):
     # 假設我們在測試，當價格 > 100000 時開空，< 90000 時開多 (舉例)
     # 實戰中請替換成你的 AI 模型預測結果
     
-    # 範例：查詢目前帳戶餘額 (不要每次都查，會太慢，建議設間隔)
+    # 範例：查詢目前帳戶餘額
     assets = client.get_account_assets()
     print(assets)
 
-    # 範例：觸發下單 (請小心使用，這是真實下單！)
-    # client.place_order(side=1, size="0.001", price=str(current_price - 10))
+    # 範例：觸發下單
+    # client.place_order(
+    #     side=4,            # 4: 平空
+    #     size="0.1", 
+    #     match_price="1"    # 1: 市價
+    # )
 
 # --- 主程式進入點 ---
 if __name__ == "__main__":
