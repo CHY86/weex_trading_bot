@@ -6,7 +6,8 @@ import base64
 import requests
 from threading import Lock
 from datetime import datetime
-import config  # 匯入設定檔
+import config
+from ai_logger import save_local_log
 
 class ClientOrderIdGenerator:
     """生成唯一的訂單 ID，避免重複下單"""
@@ -165,7 +166,7 @@ class WeexClient:
     
     def upload_ai_log(self, stage, model, input_data, output_data, explanation, order_id=None):
         """
-        上傳 AI 決策日誌 (競賽專用)
+        上傳 AI 決策日誌
         
         Args:
             stage (str): AI 參與的階段 (例如: "Strategy Generation", "Signal Validation")
@@ -175,9 +176,12 @@ class WeexClient:
             explanation (str): AI 的推論解釋 (自然語言摘要)
             order_id (str, optional): 關聯的訂單 ID (若有下單則必填). Defaults to None.
         """
-        # 根據經驗，API 路徑通常為 /capi/v2/order/uploadAiLog，若請求失敗請確認官方文件中的具體 Endpoint
         endpoint = "/capi/v2/order/uploadAiLog" 
         
+        # 1. [新增] 先寫入本地檔案 (雙重保險)
+        save_local_log(stage, model, input_data, output_data, explanation, order_id)
+
+        # 2. 準備上傳 API 的 Body        
         body = {
             "stage": str(stage),
             "model": str(model),

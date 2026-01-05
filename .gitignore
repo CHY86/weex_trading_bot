@@ -4,3 +4,6 @@ __pycache__/
 *.log
 .vscode/
 venv/
+logs/
+*.jsonl
+*.log
