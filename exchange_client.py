@@ -168,8 +168,8 @@ class WeexClient:
             explanation (str): AI 的推論解釋 (自然語言摘要)
             order_id (str, optional): 關聯的訂單 ID (若有下單則必填). Defaults to None.
         """
-        # 根據經驗，API 路徑通常為 /capi/v2/ai/log，若請求失敗請確認官方文件中的具體 Endpoint
-        endpoint = "/capi/v2/ai/log" 
+        # 根據經驗，API 路徑通常為 /capi/v2/order/uploadAiLog，若請求失敗請確認官方文件中的具體 Endpoint
+        endpoint = "/capi/v2/order/uploadAiLog" 
         
         body = {
             "stage": str(stage),
