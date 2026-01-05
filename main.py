@@ -6,28 +6,59 @@ from market_stream import MarketStream
 # 初始化交易所客戶端
 client = WeexClient()
 
-# --- 你的 AI 策略邏輯 ---
+# --- AI 策略邏輯 ---
 def ai_strategy(current_price):
-    """
-    這是核心策略函數。
-    每當 WebSocket 收到最新價格，這裡就會被觸發一次。
-    """
-    print(f" [AI 監控中] 當前價格: {current_price}")
+    print(f"📊 [AI 監控中] 當前價格: {current_price}")
     
-    # === 範例策略：簡單的價格突破策略 ===
-    # 假設我們在測試，當價格 > 100000 時開空，< 90000 時開多 (舉例)
-    # 實戰中請替換成你的 AI 模型預測結果
+    # 1. 準備 AI 的輸入資料
+    ai_input = {
+        "price": current_price,
+        "indicator": "RSI_is_30",  # 範例
+        "query": "Should I buy BTC now?"
+    }
     
-    # 範例：查詢目前帳戶餘額
-    assets = client.get_account_assets()
-    print(assets)
+    # 2. 假設這是 AI 的思考過程 (這裡是模擬，實際上是您的 AI 模型輸出)
+    # 實戰中這裡會是: ai_response = my_ai_model.predict(ai_input)
+    ai_model_name = "DeepSeek-V3" # 或 GPT-4
+    ai_output = {
+        "decision": "BUY",
+        "confidence": 0.85,
+        "reasoning": "RSI is oversold and price touched support level."
+    }
+    
+    # 3. 判斷是否需要交易
+    if ai_output["decision"] == "BUY":
+        # --- [關鍵步驟 A] 先記錄 AI 的決策過程 (即使沒成交也要記，證明有在運算) ---
+        client.upload_ai_log(
+            stage="Signal Generation",
+            model=ai_model_name,
+            input_data=ai_input,
+            output_data=ai_output,
+            explanation=f"AI detected buy signal at {current_price} due to oversold conditions."
+        )
 
-    # 範例：觸發下單
-    # client.place_order(
-    #     side=4,            # 4: 平空
-    #     size="0.1", 
-    #     match_price="1"    # 1: 市價
-    # )
+        # 4. 執行下單
+        # 注意：我們使用融合版 place_order，並接收回傳結果以取得 order_id
+        order_result = client.place_order(
+            side=1,           # 開多
+            size="0.01", 
+            match_price="1"   # 市價單
+        )
+        
+        # 5. --- [關鍵步驟 B] 下單成功後，補上帶有 Order ID 的 Log (證明這筆單是 AI 下的) ---
+        if order_result and "data" in order_result and "orderId" in order_result["data"]:
+            order_id = order_result["data"]["orderId"]
+            
+            client.upload_ai_log(
+                stage="Order Execution",
+                model=ai_model_name,
+                input_data={"signal": "BUY", "market_price": current_price},
+                output_data=order_result, # 把下單結果當作輸出
+                explanation="Executed market buy order based on AI signal.",
+                order_id=order_id  # 👈 這裡帶入 Order ID 是合規關鍵
+            )
+            print(f"✅ 訂單 {order_id} 已關聯 AI Log")
+
 
 # --- 主程式進入點 ---
 if __name__ == "__main__":

@@ -155,3 +155,32 @@ class WeexClient:
         endpoint = "/capi/v2/order/cancelAllOrders"
         body = {"cancelOrderType": "normal"} # normal 撤銷限價單
         return self._send_request("POST", endpoint, body_dict=body)
+    
+    def upload_ai_log(self, stage, model, input_data, output_data, explanation, order_id=None):
+        """
+        上傳 AI 決策日誌 (競賽專用)
+        
+        Args:
+            stage (str): AI 參與的階段 (例如: "Strategy Generation", "Signal Validation")
+            model (str): 使用的模型名稱 (例如: "GPT-4", "Llama-3-70b")
+            input_data (dict/str): 餵給 AI 的輸入資料 (Prompt, K線數據等)
+            output_data (dict/str): AI 輸出的原始結果 (預測值, 建議方向等)
+            explanation (str): AI 的推論解釋 (自然語言摘要)
+            order_id (str, optional): 關聯的訂單 ID (若有下單則必填). Defaults to None.
+        """
+        # 根據經驗，API 路徑通常為 /capi/v2/ai/log，若請求失敗請確認官方文件中的具體 Endpoint
+        endpoint = "/capi/v2/ai/log" 
+        
+        body = {
+            "stage": str(stage),
+            "model": str(model),
+            "input": input_data,   # 這裡直接傳入 Python 物件，_send_request 會自動轉 JSON
+            "output": output_data,
+            "explanation": str(explanation)
+        }
+        
+        if order_id:
+            body["orderId"] = str(order_id)
+            
+        print(f"📝 上傳 AI Log: [{stage}] {explanation[:30]}...")
+        return self._send_request("POST", endpoint, body_dict=body)
