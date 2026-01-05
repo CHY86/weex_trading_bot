@@ -76,10 +76,17 @@ class WeexClient:
             else:
                 response = requests.post(full_url, headers=headers, data=body_str)
             
-            # 回傳 JSON 格式
+            # --- [除錯修正] 檢查狀態碼，若非 200 則印出詳細錯誤 ---
+            if response.status_code != 200:
+                print(f"⚠️ API Error [{response.status_code}]: {response.text}")
+            # --------------------------------------------------
+
             return response.json()
         except Exception as e:
-            print(f"❌ API Request Error: {e}")
+            # 這裡會印出真正的問題 (例如: 404 Not Found)
+            print(f"❌ API Request Failed. URL: {full_url}")
+            print(f"❌ Response Text: {response.text if 'response' in locals() else 'No Response'}")
+            print(f"❌ Error Detail: {e}")
             return None
 
     # --- 封裝好的功能函數 ---
