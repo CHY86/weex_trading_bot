@@ -65,14 +65,14 @@ class MarketStream:
         try:
             data = json.loads(message)
             
-            # 1. 處理 Ping
             if data == 'ping':
                 ws.send('pong')
                 return
             
-            # 2. 處理訂閱確認
-            if data.get('event') == 'subscribe':
-                # print(f"✅ 訂閱成功: {data}")
+            # [修正點] 文件指出回傳事件為 "subscribed" (過去式)
+            event = data.get('event')
+            if event == 'subscribe' or event == 'subscribed':
+                print(f"✅ 訂閱成功: {data.get('channel')}")
                 return
 
             # 3. 處理 K線/行情數據
