@@ -8,16 +8,21 @@ import base64
 import config
 
 class MarketStream:
-    def __init__(self, symbol, on_price_update_callback):
-        # [修正點 1] 變數名稱統一：這裡定義的名稱必須與 generate_headers 裡用的一樣
+    def __init__(self, symbol, intervals, on_price_update_callback):
+        """
+        Args:
+            symbol (str): 交易對名稱 (e.g., 'cmt_btcusdt')
+            intervals (list): 訂閱的時間週期列表 (e.g., ['MINUTE_1', 'HOUR_4'])
+            on_price_update_callback (func): 當有新數據時的回調函數
+        """
         self.api_key = config.API_KEY
-        self.api_secret = config.SECRET_KEY      # 修正：對應下方 self.api_secret
-        self.api_passphrase = config.PASSPHRASE  # 修正：對應下方 self.api_passphrase
+        self.api_secret = config.SECRET_KEY
+        self.api_passphrase = config.PASSPHRASE
         
         self.symbol = symbol
+        self.intervals = intervals  # 接收列表
         self.callback = on_price_update_callback
         
-        # 使用需要驗證的公共頻道路徑
         self.request_path = "/v2/ws/public"
         self.url = f"wss://ws-contract.weex.com{self.request_path}"
         
@@ -25,81 +30,71 @@ class MarketStream:
         self.wst = None
 
     def generate_headers(self):
-        """生成 API 驗證所需的 Headers"""
         timestamp = str(int(time.time() * 1000))
-        
-        # 簽名訊息 = timestamp + requestPath
         message = timestamp + self.request_path
-        
-        # [修正點 2] 確保這裡引用的變數在 __init__ 中已正確定義
         signature = hmac.new(
             self.api_secret.encode('utf-8'),
             message.encode('utf-8'),
             hashlib.sha256
         ).digest()
-        
         signature_b64 = base64.b64encode(signature).decode('utf-8')
         
-        headers = {
+        return {
             "User-Agent": "PythonClient/1.0",
             "ACCESS-KEY": self.api_key,
             "ACCESS-PASSPHRASE": self.api_passphrase,
             "ACCESS-TIMESTAMP": timestamp,
             "ACCESS-SIGN": signature_b64
         }
-        return headers
 
     def on_open(self, ws):
-        print(f"✅ WebSocket 連線已建立 (身分驗證通過)")
+        print(f"✅ WebSocket 連線已建立，正在訂閱 {self.intervals}...")
         
-        # [訂閱請求]
-        # 使用你指定的 channel 格式
-        subscribe_payload = {
-            "event": "subscribe",
-            "channel": f"kline.LAST_PRICE.{self.symbol}.MINUTE_1"
-        }
-        
-        json_str = json.dumps(subscribe_payload)
-        ws.send(json_str)
-        print(f"已發送訂閱: {json_str}")
+        # [優化] 支援多頻道訂閱
+        # WEEX 通常允許一次發送多個訂閱，或分多次發送。這裡示範分次發送確保成功。
+        for interval in self.intervals:
+            channel_name = f"kline.LAST_PRICE.{self.symbol}.{interval}"
+            subscribe_payload = {
+                "event": "subscribe",
+                "channel": channel_name
+            }
+            ws.send(json.dumps(subscribe_payload))
+            print(f"📡 已發送訂閱: {channel_name}")
 
     def on_message(self, ws, message):
         try:
             data = json.loads(message)
             
-            # 1. 處理 Ping (維持連線)
+            # 1. 處理 Ping
             if data == 'ping':
                 ws.send('pong')
                 return
             
             # 2. 處理訂閱確認
             if data.get('event') == 'subscribe':
-                print(f"✅ 訂閱成功: {data}")
+                # print(f"✅ 訂閱成功: {data}")
                 return
 
             # 3. 處理 K線/行情數據
-            # 這裡增加一些容錯邏輯來解析 data
-            if 'data' in data:
+            if 'data' in data and 'channel' in data:
+                channel = data['channel']
                 market_data = data['data']
                 
-                # 情況 A: data 是一個 list (有些 API 回傳格式)
+                # 解析週期 (從 channel 字串中取出 MINUTE_1 或 HOUR_4)
+                # 格式範例: kline.LAST_PRICE.cmt_btcusdt.MINUTE_1
+                interval = channel.split('.')[-1]
+
                 if isinstance(market_data, list) and len(market_data) > 0:
                     market_data = market_data[0]
                 
-                # 情況 B: data 是一個 dict
                 if isinstance(market_data, dict):
-                    # 嘗試抓取 close (收盤價/最新價)
-                    # 你的範例格式可能是 close 或 c
-                    if 'close' in market_data:
-                        price = float(market_data['close'])
-                        self.callback(price)
-                    elif 'c' in market_data:
-                        price = float(market_data['c'])
-                        self.callback(price)
+                    price = float(market_data.get('close') or market_data.get('c', 0))
+                    
+                    # 回調時多傳一個參數：interval
+                    self.callback(interval, price)
             
         except Exception as e:
-            # 暫時只印出錯誤，不中斷程式
-            print(f"解析錯誤: {e} (收到: {message[:100]}...)")
+            print(f"解析錯誤: {e}")
 
     def on_error(self, ws, error):
         print(f"⚠️ WS Error: {error}")
@@ -111,9 +106,7 @@ class MarketStream:
 
     def start(self):
         try:
-            # 1. 生成簽名
             auth_headers = self.generate_headers()
-            
             websocket.enableTrace(False)
             self.ws = websocket.WebSocketApp(
                 self.url,
@@ -123,7 +116,6 @@ class MarketStream:
                 on_close=self.on_close,
                 header=auth_headers
             )
-
             self.wst = threading.Thread(target=self.ws.run_forever)
             self.wst.daemon = True
             self.wst.start()
