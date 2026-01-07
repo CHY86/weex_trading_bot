@@ -15,6 +15,7 @@ RSI_PERIOD = 14
 BB_LENGTH = 20
 BB_STD = 2.0
 COOLDOWN_HOURS = 4  # 交易冷卻時間
+last_refresh_hour = -1 # 上次更新的小時
 
 class StrategyManager:
     def __init__(self, client):
@@ -158,16 +159,31 @@ if __name__ == "__main__":
     
     # 定期更新歷史數據的線程 (簡單用 time check 模擬)
     last_update_time = time.time()
-
+    print(client)
     def callback_wrapper(interval, price):
-        # 1. 傳遞給策略
+        global last_update_time, last_refresh_hour
+        
+        # 1. 執行即時策略檢查
         strategy.on_tick(interval, price)
         
-        # 2. 每 15 分鐘重新抓一次歷史數據 (確保指標是最新的)
-        global last_update_time
-        if time.time() - last_update_time > 900: # 900秒 = 15分
+        # 2. [優化] 智慧更新邏輯
+        current_time = datetime.now()
+        current_hour = current_time.hour
+        
+        # 條件 A: 剛跨過 4 小時的整點 (例如 00:00, 04:00, 08:00...)
+        # 這樣可以確保 K 線一收盤，我們馬上更新指標
+        is_4h_close = (current_hour % 4 == 0) and (current_hour != last_refresh_hour)
+        
+        # 條件 B: 保護機制，每 15 分鐘還是更新一次 (避免 WebSocket 漏失或其他異常)
+        is_periodic_check = (time.time() - last_update_time > 900)
+
+        if is_4h_close or is_periodic_check:
+            print(f"🔄 觸發數據更新: 4H換線={is_4h_close}, 定時檢查={is_periodic_check}")
             strategy.refresh_history()
+            
             last_update_time = time.time()
+            if is_4h_close:
+                last_refresh_hour = current_hour
 
     # 啟動 WebSocket (監聽多個週期)
     stream = MarketStream(SYMBOL, INTERVALS, callback_wrapper)
