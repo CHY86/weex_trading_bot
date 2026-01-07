@@ -15,9 +15,16 @@ SYMBOL = "cmt_btcusdt"  # 你的 AI 要交易的幣種
 # 可選值: MINUTE_1, MINUTE_5, MINUTE_15, MINUTE_30, HOUR_1, HOUR_4, HOUR_12
 STRATEGY_INTERVAL = "MINUTE_5"
 
-# [新增] 是否上傳 AI Log (True=開啟, False=關閉)
-ENABLE_AI_LOG = True
+# RSI 設定
+RSI_PERIOD = 14       # 計算週期 (標準為14)
+RSI_OVERBOUGHT = 70   # 超買閥值 (超過此值做空)
 
-# [新增] RSI 超買/超賣閥值
-RSI_OVERBOUGHT = 70 
-RSI_PERIOD = 14
+# 布林通道設定
+BB_LENGTH = 20
+BB_STD = 2.0
+
+# 風控設定
+COOLDOWN_HOURS = 2    # 交易冷卻時間(小時)
+
+# 系統設定
+ENABLE_AI_LOG = True  # 是否上傳 AI Log
