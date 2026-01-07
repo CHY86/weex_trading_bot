@@ -17,3 +17,7 @@ STRATEGY_INTERVAL = "MINUTE_5"
 
 # [新增] 是否上傳 AI Log (True=開啟, False=關閉)
 ENABLE_AI_LOG = True
+
+# [新增] RSI 超買/超賣閥值
+RSI_OVERBOUGHT = 70 
+RSI_PERIOD = 14
