@@ -82,6 +82,19 @@ class WeexClient:
             print(f"❌ API Request Failed: {e}")
             return None
 
+    def _map_interval(self, interval):
+            """將 WebSocket 用的 interval 字串映射為 REST API 格式"""
+            mapping = {
+                "MINUTE_1": "1m",
+                "MINUTE_5": "5m",
+                "MINUTE_15": "15m",
+                "MINUTE_30": "30m",   # [重點] 確保有這個
+                "HOUR_1": "1h",
+                "HOUR_4": "4h",
+                "HOUR_12": "12h"
+            }
+            return mapping.get(interval, "1m") # 預設 1m
+
     # --- [修正] 歷史 K 線功能 (根據官方文件) ---
 
     def get_history_candles(self, symbol, granularity, start_time=None, end_time=None, limit=100):
@@ -111,7 +124,6 @@ class WeexClient:
         print(f"⚠️ 警告: K 線回傳格式不如預期或為空: {str(response)[:100]}")
         return []
 
-    # ... (其他原有的下單函數保持不變) ...
     def get_server_time(self):
         return self._send_request("GET", "/capi/v2/market/time", "?symbol=" + config.SYMBOL)
 

@@ -49,7 +49,7 @@ jobs:
             
             # [關鍵修改] 指向虛擬環境內的 Python 執行檔
             # 這樣執行時，程式就會自動抓到 venv 裡面的 requests 和 websocket-client
-            ExecStart=/home/ubuntu/weex_trading_bot/venv/bin/python /home/ubuntu/weex_trading_bot/main.py
+            ExecStart=/home/ubuntu/weex_trading_bot/venv/bin/python -u /home/ubuntu/weex_trading_bot/main.py
             
             Restart=always
             RestartSec=3
