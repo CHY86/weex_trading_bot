@@ -85,35 +85,30 @@ class WeexClient:
     # --- [修正] 歷史 K 線功能 (根據官方文件) ---
 
     def get_history_candles(self, symbol, granularity, start_time=None, end_time=None, limit=100):
-        """
-        獲取歷史 K 線數據 (Get Historical Candlestick)
-        文件來源: /capi/v2/market/historyCandles
+        # 注意: 根據文件，endpoint 區分大小寫
+        endpoint = "/capi/v2/market/historyCandles"
         
-        Args:
-            symbol (str): 交易對 (e.g., cmt_btcusdt)
-            granularity (str): 時間粒度 (1m, 5m, 15m, 30m, 1h, 4h, 12h, 1d, 1w)
-            start_time (int, optional): Unix 毫秒時間戳
-            end_time (int, optional): Unix 毫秒時間戳 (若提供，優先權高於 start_time)
-            limit (int, optional): 預設 100, 最大 100
-        """
-        endpoint = "/capi/v2/market/historyCandles"  # [修正] 依照文件大小寫
-        
-        # 1. 建立基本 Query
         query = f"?symbol={symbol}&granularity={granularity}&limit={limit}"
         
-        # 2. 加入時間參數 (根據文件：end_time 優先)
         if end_time:
             query += f"&endTime={end_time}"
         elif start_time:
             query += f"&startTime={start_time}"
             
-        # 3. 發送請求
+        # 取得完整回應
         response = self._send_request("GET", endpoint, query)
         
-        # 4. 處理回傳
-        # 文件範例回傳: [[time, open, high, low, close, vol, quote_vol], ...]
-        if response and "data" in response:
+        # [修正點] 針對回傳格式進行彈性處理
+        # 情況 A: 回傳直接是 List [[time, open...], ...] (根據 HTML 文件)
+        if isinstance(response, list):
+            return response
+            
+        # 情況 B: 回傳是 Dict 且有 "data" (標準 API 格式)
+        if isinstance(response, dict) and "data" in response:
             return response["data"]
+            
+        # 情況 C: 錯誤或無資料
+        print(f"⚠️ 警告: K 線回傳格式不如預期或為空: {str(response)[:100]}")
         return []
 
     # ... (其他原有的下單函數保持不變) ...
