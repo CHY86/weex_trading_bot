@@ -15,6 +15,7 @@ RSI_PERIOD = 14
 BB_LENGTH = 20
 BB_STD = 2.0
 COOLDOWN_HOURS = 4  # 交易冷卻時間
+last_heartbeat_time = 0 # 上次心跳時間
 last_refresh_hour = -1 # 上次更新的小時
 
 class StrategyManager:
@@ -161,10 +162,16 @@ if __name__ == "__main__":
     last_update_time = time.time()
     print(client)
     def callback_wrapper(interval, price):
-        global last_update_time, last_refresh_hour
-        
-        # 1. 執行即時策略檢查
+        global last_update_time, last_refresh_hour, last_heartbeat_time
+    
+        # 1. 傳遞給策略 (保持原樣)
         strategy.on_tick(interval, price)
+        
+        # --- [新增] 每 30 秒印一次心跳，證明機器人活著 ---
+        if time.time() - last_heartbeat_time > 30:
+            print(f"💓 [系統執行中] 監控中... {interval} 最新價格: {price} | RSI: {strategy.history_4h.iloc[-1]['RSI']:.2f} (上個4H)")
+            last_heartbeat_time = time.time()
+        # ------------------------------------------------
         
         # 2. [優化] 智慧更新邏輯
         current_time = datetime.now()
