@@ -155,6 +155,11 @@ class WeexClient:
         return self._send_request("POST", endpoint, body_dict=body)
 
     def upload_ai_log(self, stage, model, input_data, output_data, explanation, order_id=None):
+        # [新增] 檢查 Config 開關
+        if not getattr(config, 'ENABLE_AI_LOG', True):
+            print(f"🚫 [AI Log 跳過] {explanation[:30]}... (Config已關閉)")
+            return None # 直接返回，不發送請求
+
         endpoint = "/capi/v2/order/uploadAiLog"
         save_local_log(stage, model, input_data, output_data, explanation, order_id)
         body = {

@@ -14,3 +14,6 @@ SYMBOL = "cmt_btcusdt"  # 你的 AI 要交易的幣種
 # 策略使用的 K 線時間維度
 # 可選值: MINUTE_1, MINUTE_5, MINUTE_15, MINUTE_30, HOUR_1, HOUR_4, HOUR_12
 STRATEGY_INTERVAL = "MINUTE_5"
+
+# [新增] 是否上傳 AI Log (True=開啟, False=關閉)
+ENABLE_AI_LOG = True
