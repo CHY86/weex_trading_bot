@@ -64,7 +64,13 @@ class StrategyManager:
             self.prev_low = last_completed['low']
             rsi_val = last_completed['RSI']
             
-            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值: {config.RSI_OVERBOUGHT})")
+            # [新增] 取得布林上軌值
+            bb_col_name = f'BBU_{config.BB_LENGTH}_{config.BB_STD}'
+            bb_upper_val = last_completed[bb_col_name]
+            
+            rsi_val = last_completed['RSI']
+            
+            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
     def on_tick(self, interval, current_price):
         if interval != "MINUTE_1": 
@@ -195,7 +201,7 @@ if __name__ == "__main__":
                 if rsi_s is not None:
                     current_rsi = rsi_s.iloc[-1]
 
-            print(f"💓 [監控中] {SYMBOL}  {config.STRATEGY_INTERVAL} | 現價: {price} | 即時RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT})")
+            print(f"💓 [監控中] {SYMBOL} {config.STRATEGY_INTERVAL} | 現價: {price} | RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT}) | BB上軌: {current_bb_upper:.2f}")            
             last_heartbeat_time = time.time()
 
         if should_refresh_data(last_update_time):
