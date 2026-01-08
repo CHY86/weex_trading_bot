@@ -137,27 +137,30 @@ class StrategyManager:
         if self.history_df.empty:
             return
         
-        # --- 計算即時 RSI ---
+        # --- 計算即時指標 ---
         closes = self.history_df['close'].copy()
+        # 建立包含當前價格的臨時序列
         temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
         
+        # 1. 計算即時 RSI
         rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
         if rsi_series is None or len(rsi_series) == 0:
             return
-            
         real_time_rsi = rsi_series.iloc[-1]
 
-        # 取得布林通道上軌
-        latest_history = self.history_df.iloc[-1]
-        bb_col = self._get_bbu_col_name(self.history_df)
-        bb_upper = latest_history[bb_col] if bb_col else 999999
+        # 2. [修正] 計算即時布林通道 (使用 temp_series 重算)
+        bb_df = ta.bbands(temp_series, length=config.BB_LENGTH, std=config.BB_STD)
+        
+        # 動態取得上軌
+        bb_col = self._get_bbu_col_name(bb_df)
+        bb_upper = bb_df.iloc[-1][bb_col] if bb_col else 999999
 
         # --- 策略邏輯 ---
         is_breakout = current_price > self.prev_high
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
         
         if is_breakout and is_overextended:
-            reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up"
+            reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up({bb_upper:.2f})"
             self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
 
     def execute_trade_logic(self, price, direction, reason, rsi_val):
@@ -255,19 +258,22 @@ if __name__ == "__main__":
         # 心跳顯示 (每 30 秒)
         if time.time() - last_heartbeat_time > 30:
             current_rsi = 0
-            current_bb_upper = 0 # [保留] 初始化變數
+            current_bb_upper = 0
             
             if not strategy.history_df.empty:
                 closes = strategy.history_df['close'].copy()
                 temp_series = pd.concat([closes, pd.Series([price])], ignore_index=True)
+                
+                # 1. 重算即時 RSI
                 rsi_s = ta.rsi(temp_series, length=config.RSI_PERIOD)
                 if rsi_s is not None:
                     current_rsi = rsi_s.iloc[-1]
                 
-                # [保留] 取得當前布林上軌
-                bb_col = strategy._get_bbu_col_name(strategy.history_df)
+                # 2. [修正] 重算即時 BB 上軌
+                bb_df = ta.bbands(temp_series, length=config.BB_LENGTH, std=config.BB_STD)
+                bb_col = strategy._get_bbu_col_name(bb_df)
                 if bb_col:
-                    current_bb_upper = strategy.history_df.iloc[-1][bb_col]
+                    current_bb_upper = bb_df.iloc[-1][bb_col]
 
             print(f"💓 [監控中] {SYMBOL} {config.STRATEGY_INTERVAL} | 現價: {price} | RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT}) | BB上軌: {current_bb_upper:.2f}")            
             last_heartbeat_time = time.time()
