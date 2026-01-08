@@ -159,23 +159,78 @@ def show_positions(client):
 # --- [新增功能 1] 查看帳戶詳情 (含槓桿) ---
 def check_account_detail(client):
     print(f"\n🔍 正在獲取 {config.SYMBOL} 帳戶詳情...")
-    # 這裡呼叫的是 exchange_client.py 裡我們新增的 get_account_detail
     res = client.get_account_detail(coin="USDT")
     
-    if res and 'data' in res:
-        acc = res['data']
-        print("-" * 40)
-        print(f"💰 幣種: {acc.get('coin')}")
-        print(f"💵 權益 (Equity): {acc.get('equity')}")
-        print(f"🔓 可用餘額: {acc.get('available')}")
-        print(f"⚡ 當前設定槓桿 (Fixed Leverage): x{acc.get('fixedLeverage', 'N/A')}")
+    # 檢查是否包含 account 物件
+    if res and 'account' in res:
+        acc = res['account']
+        collateral_list = res.get('collateral', [])
         
-        mode = acc.get('marginMode')
-        mode_str = '全倉 (Cross)' if mode == 1 else '逐倉 (Isolated)'
-        print(f"🛡️ 保證金模式: {mode_str}")
-        print("-" * 40)
+        print("\n" + "=" * 50)
+        print(f"📄 帳戶詳細資訊報告 (Symbol: {config.SYMBOL})")
+        print("=" * 50)
+
+        # 1. 手續費設定 (Fee Settings)
+        print(f"\n[1] 💸 手續費設定")
+        
+        # 預設手續費
+        def_fee = acc.get('defaultFeeSetting', {})
+        print(f"  • 預設 Taker 費率: {def_fee.get('taker_fee_rate', 'N/A')}")
+        print(f"  • 預設 Maker 費率: {def_fee.get('maker_fee_rate', 'N/A')}")
+        
+        # 針對當前交易對的手續費
+        fee_settings = acc.get('feeSetting', [])
+        target_fee = next((f for f in fee_settings if f.get('symbol') == config.SYMBOL), None)
+        if target_fee:
+            print(f"  • {config.SYMBOL} Taker: {target_fee.get('taker_fee_rate')}")
+            print(f"  • {config.SYMBOL} Maker: {target_fee.get('maker_fee_rate')}")
+        else:
+            print(f"  • {config.SYMBOL} 專屬設定: 未找到 (使用預設)")
+
+        # 2. 槓桿與模式 (Leverage & Mode)
+        print(f"\n[2] ⚙️ 槓桿與倉位模式 ({config.SYMBOL})")
+        
+        # 槓桿設定
+        lev_settings = acc.get('leverageSetting', [])
+        target_lev = next((l for l in lev_settings if l.get('symbol') == config.SYMBOL), {})
+        
+        print(f"  • 全倉槓桿 (Cross): x{target_lev.get('cross_leverage', 'N/A')}")
+        print(f"  • 逐倉長倉 (Long):  x{target_lev.get('isolated_long_leverage', 'N/A')}")
+        print(f"  • 逐倉短倉 (Short): x{target_lev.get('isolated_short_leverage', 'N/A')}")
+
+        # 模式設定
+        mode_settings = acc.get('modeSetting', [])
+        target_mode = next((m for m in mode_settings if m.get('symbol') == config.SYMBOL), {})
+        
+        m_mode = target_mode.get('marginMode', 'N/A')
+        p_mode = target_mode.get('positionModeEnum', 'N/A')
+        print(f"  • 保證金模式: {m_mode} ({'全倉' if m_mode == 'SHARED' else '逐倉'})")
+        print(f"  • 持倉模式:   {p_mode}")
+
+        # 3. 資金與抵押品詳情 (Collateral - USDT)
+        print(f"\n[3] 💰 資金詳情 (USDT)")
+        usdt_assets = next((c for c in collateral_list if c.get('coin') == 'USDT'), {})
+        
+        if usdt_assets:
+            print(f"  • 當前餘額 (Amount):      {usdt_assets.get('amount')}")
+            print(f"  • 凍結金額 (Legacy):      {usdt_assets.get('legacy_amount')}")
+            print(f"  • 累計充值 (Deposit):     {usdt_assets.get('cum_deposit_amount')}")
+            print(f"  • 累計提現 (Withdraw):    {usdt_assets.get('cum_withdraw_amount')}")
+            print(f"  • 累計已付資金費:         {usdt_assets.get('cum_position_funding_amount')}")
+            print(f"  • 累計強平手續費:         {usdt_assets.get('cum_position_liquidate_fee_amount')}")
+            print(f"  • 累計已實現盈虧(多):     {usdt_assets.get('cum_position_close_long_amount')}")
+            print(f"  • 累計已實現盈虧(空):     {usdt_assets.get('cum_position_close_short_amount')}")
+        else:
+            print("  • 無 USDT 資產資料")
+
+        # 4. 其他帳戶資訊
+        print(f"\n[4] ℹ️ 其他資訊")
+        print(f"  • 帳戶建立時間: {timestamp_to_str(acc.get('createdTime'))}")
+        print(f"  • 最後更新時間: {timestamp_to_str(acc.get('updatedTime'))}")
+        
+        print("=" * 50)
     else:
-        print("❌ 無法獲取詳細資訊，請確認 exchange_client.py 是否已更新。")
+        print(f"❌ 無法獲取詳細資訊，API 回傳內容: {res}")
 
 # --- [新增功能 2] 調整槓桿 ---
 def modify_leverage(client):
