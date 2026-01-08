@@ -196,7 +196,7 @@ class WeexClient:
     def get_account_detail(self, coin="USDT"):
         """獲取帳戶詳細資訊（含槓桿、餘額等）"""
         params = {"coin": coin}
-        return self._request("GET", "/capi/v2/account/getAccount", params)
+        return self._send_request("GET", "/capi/v2/account/getAccount", params)
 
     def set_leverage(self, symbol, leverage, margin_mode=1):
         """
@@ -209,7 +209,7 @@ class WeexClient:
             "longLeverage": str(leverage),
             "shortLeverage": str(leverage)
         }
-        return self._request("POST", "/capi/v2/account/leverage", data)
+        return self._send_request("POST", "/capi/v2/account/leverage", data)
 
     # --- 交易執行 (保持不變) ---
     def place_order(self, side, size, price=None, match_price="0", order_type="0", 
