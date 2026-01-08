@@ -81,12 +81,21 @@ def show_history_orders(client):
         side_str = side_map.get(str(o.get('type')), str(o.get('type')))
         status = o.get('status', o.get('state', '-'))
         
+        # 處理止盈止損顯示 (若無設定則顯示 -)
+        tp = o.get('presetTakeProfitPrice')
+        sl = o.get('presetStopLossPrice')
+        tp_str = tp if tp and float(tp) > 0 else '-'
+        sl_str = sl if sl and float(sl) > 0 else '-'
+
         data_list.append({
             "時間": timestamp_to_str(o.get('createTime') or o.get('cTime')),
             "方向": side_str,
             "委託價": o.get('price'),
-            "成交均價": o.get('price_avg') or o.get('priceAvg', '-'),
-            "數量": o.get('size'),
+            "均價": o.get('price_avg') or o.get('priceAvg', '-'),
+            "已成/總量": f"{o.get('filled_qty', 0)} / {o.get('size')}",
+            "止盈": tp_str,
+            "止損": sl_str,
+            "手續費": o.get('fee', 0),
             "盈虧": o.get('totalProfits', 0),
             "狀態": status
         })
