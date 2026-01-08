@@ -4,6 +4,7 @@ from datetime import datetime
 from exchange_client import WeexClient
 import config
 
+# 設定 pandas 顯示選項
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 pd.set_option('display.unicode.east_asian_width', True)
@@ -18,22 +19,18 @@ def timestamp_to_str(ts):
 def show_assets(client):
     print("\n💰 [帳戶資金概況]")
     try:
-        # [修正] 這裡取得的 res 現在會直接是一個 List
-        # 例如: [{'coinName': 'USDT', 'available': '...', ...}, {...}]
         res = client.get_account_assets()
-        
         target_coin = "USDT"
         found = False
         
         if isinstance(res, list):
             for asset in res:
-                # 根據您的錯誤訊息，key 是 'coinName'
                 if asset.get('coinName') == target_coin:
                     found = True
                     equity = float(asset.get('equity', 0))
                     available = float(asset.get('available', 0))
                     frozen = float(asset.get('frozen', 0))
-                    unrealized = float(asset.get('unrealizePnl', 0)) # 注意: API 拼寫可能是 unrealizePnl
+                    unrealized = float(asset.get('unrealizePnl', 0))
                     
                     print(f"--------------------------------------------------")
                     print(f"🪙  幣種: {target_coin}")
@@ -45,17 +42,15 @@ def show_assets(client):
                     break
         
         if not found:
-            print(f"⚠️ 找不到 {target_coin} 資產資料 (API回傳: {res})")
-            
+            print(f"⚠️ 找不到 {target_coin} 資產資料")
     except Exception as e:
         print(f"❌ 發生錯誤: {e}")
 
 def show_open_orders(client):
-    print(f"\n📋 [當前掛單/持倉] (交易對: {config.SYMBOL})")
+    print(f"\n📋 [當前掛單] (交易對: {config.SYMBOL})")
     orders = client.get_open_orders(symbol=config.SYMBOL)
-    
     if not orders:
-        print("✅ 目前沒有未完成的訂單。")
+        print("✅ 無掛單。")
         return
 
     data_list = []
@@ -68,19 +63,16 @@ def show_open_orders(client):
             "方向": side_str,
             "價格": o.get('price'),
             "數量": o.get('size'),
-            "已成交": o.get('filled_qty', 0),
+            "已成": o.get('filled_qty', 0),
             "訂單ID": o.get('order_id') or o.get('orderId')
         })
-    
-    df = pd.DataFrame(data_list)
-    print(df.to_string(index=False))
+    print(pd.DataFrame(data_list).to_string(index=False))
 
 def show_history_orders(client):
-    print(f"\n📜 [歷史訂單 - 最近 20 筆] (交易對: {config.SYMBOL})")
+    print(f"\n📜 [歷史訂單 - 近20筆] (交易對: {config.SYMBOL})")
     orders = client.get_history_orders(symbol=config.SYMBOL, page_size=20)
-    
     if not orders:
-        print("📭 查無歷史紀錄。")
+        print("📭 無歷史紀錄。")
         return
 
     data_list = []
@@ -98,9 +90,62 @@ def show_history_orders(client):
             "盈虧": o.get('totalProfits', 0),
             "狀態": status
         })
+    print(pd.DataFrame(data_list).to_string(index=False))
+
+# --- [新增] 顯示倉位函式 ---
+def show_positions(client):
+    print(f"\n📊 [當前持倉] (交易對: {config.SYMBOL})")
+    
+    # 呼叫 API (只過濾出 config.SYMBOL 的倉位)
+    positions = client.get_all_positions(symbol=config.SYMBOL)
+    
+    if not positions:
+        print("✅ 目前沒有持倉。")
+        return
+
+    data_list = []
+    for p in positions:
+        # 根據 Get_all_position.pdf 解析欄位
+        # 注意: 如果持倉量是 0，通常代表沒倉位 (有些交易所會回傳空倉資料)
+        # 這裡我們假設 API 回傳的就是有意義的倉位
         
-    df = pd.DataFrame(data_list)
-    print(df.to_string(index=False))
+        # 方向
+        side = p.get('side', '') # LONG / SHORT
+        if side == 'LONG': side = '🟢 多單'
+        elif side == 'SHORT': side = '🔴 空單'
+        
+        # 槓桿
+        leverage = p.get('leverage', '-')
+        
+        # 開倉均價
+        open_price = float(p.get('open_avg_price', 0) or p.get('open_price', 0))
+        
+        # 未結盈虧
+        unrealized = float(p.get('unrealized_pnl', 0))
+        
+        # 預估強平價
+        liqz_price = p.get('liquidate_price', '-')
+        
+        # 持倉數量 (這欄位名稱各家不同，常見有 hold_vol, size, current_amount)
+        # 根據 snippet，可能是 hold_vol 或 cum_open_size - cum_close_size
+        # 這裡嘗試讀取常見欄位
+        size = p.get('hold_vol') or p.get('size') or p.get('current_amount') or 0
+        
+        data_list.append({
+            "方向": side,
+            "槓桿": f"x{leverage}",
+            "數量": size,
+            "開倉價": open_price,
+            "未結盈虧 (UPnL)": unrealized,
+            "強平價": liqz_price,
+            "模式": p.get('margin_mode', '-')
+        })
+        
+    if data_list:
+        df = pd.DataFrame(data_list)
+        print(df.to_string(index=False))
+    else:
+        print("✅ 目前沒有持倉 (API 回傳空列表)。")
 
 def main():
     client = WeexClient()
@@ -111,13 +156,15 @@ def main():
         print("1. 💰 查詢資金 (Assets)")
         print("2. 📋 查詢當前掛單 (Open Orders)")
         print("3. 📜 查詢歷史訂單 (History)")
+        print("4. 📊 查詢當前倉位 (Positions) [NEW]")
         print("Q. 🚪 離開 (Quit)")
         
-        choice = input("\n請輸入選項 (1-3/Q): ").upper().strip()
+        choice = input("\n請輸入選項 (1-4/Q): ").upper().strip()
         
         if choice == '1': show_assets(client)
         elif choice == '2': show_open_orders(client)
         elif choice == '3': show_history_orders(client)
+        elif choice == '4': show_positions(client)
         elif choice == 'Q': break
         else: print("⚠️ 無效輸入")
         

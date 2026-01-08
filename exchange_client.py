@@ -139,6 +139,25 @@ class WeexClient:
         response = self._send_request("GET", "/capi/v2/account/assets")
         return self._extract_data(response)
 
+    def get_all_positions(self, symbol=None):
+        """
+        查詢當前倉位 (Get All Positions)
+        Ref: Get_all_position.pdf
+        Endpoint: /capi/v2/account/position/allPosition
+        """
+        endpoint = "/capi/v2/account/position/allPosition"
+        
+        # 根據文件，此 API 不需要參數 (Request parameters: NONE)
+        response = self._send_request("GET", endpoint)
+        all_positions = self._extract_data(response)
+        
+        # 如果使用者有指定 symbol，我們在 Client 端幫忙過濾
+        if symbol and all_positions:
+            # 轉換成小寫比對比較保險，或者直接比對
+            return [p for p in all_positions if p.get('symbol') == symbol]
+            
+        return all_positions
+
     def get_open_orders(self, symbol=None, order_id=None, start_time=None, end_time=None, limit=100, page=0):
         """查詢當前掛單 (修正: 根據 PDF 直接回傳 List)"""
         symbol = symbol or config.SYMBOL
