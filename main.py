@@ -27,7 +27,7 @@ class StrategyManager:
         # 初始化數據
         self.refresh_history()
 
-    # --- [新增] 動態取得布林上軌欄位名 ---
+    # --- [保留] 動態取得布林上軌欄位名 ---
     def _get_bbu_col_name(self, df):
         """
         自動尋找 BBU 開頭的欄位，避免 2.0 與 2 的命名差異問題
@@ -41,16 +41,18 @@ class StrategyManager:
         return None
 
     def refresh_history(self):
-        """根據 Config 設定的週期抓取歷史數據 (含智慧時間判斷)"""
+        """根據 Config 設定的週期抓取歷史數據"""
         print(f"🔄 正在更新 {SYMBOL} {STRATEGY_INTERVAL} 歷史數據...")
         
         now_ms = int(time.time() * 1000)
-        # 建議 limit 設大一點，以免算指標時前面的資料不夠
+        
+        limit_count = 100 
+        
         raw_klines = self.client.get_history_candles(
             symbol=SYMBOL, 
             granularity=self.client._map_interval(STRATEGY_INTERVAL),
             end_time=now_ms,
-            limit=200 
+            limit=limit_count
         )
         
         if not raw_klines:
@@ -72,7 +74,7 @@ class StrategyManager:
         
         self.history_df = df
         
-        # --- [關鍵修正] 智慧判斷取哪一根 ---
+        # --- [保留] 智慧判斷取哪一根 
         if len(df) >= 2:
             # 1. 算出「當下時間點」理論上的 K 線開盤時間
             now = datetime.now()
@@ -97,15 +99,14 @@ class StrategyManager:
             last_kline_ts = int(df.iloc[-1]['time'])
 
             # 2. 比對邏輯
+            idx_used = -1 # 預設取倒數第一根
+            
             if last_kline_ts == current_candle_ts:
-                # 情況 A: 最後一根的時間 == 當前時段 (代表 API 有給正在跑的那根)
-                # 我們要取的是「上一根已完成」的 -> -2
+                # 情況 A: API 給了正在跑的那根 (例如 14:25) -> 取上一根 (-2)
                 last_completed = df.iloc[-2]
                 idx_used = -2
             else:
-                # 情況 B: 最後一根的時間 < 當前時段 (代表 API 只給到已結算的)
-                # 例如現在 14:29 (應為 14:25 K線)，但 API 最後一根是 14:20
-                # 這時 14:20 就是我們要的「上一根已完成」 -> -1
+                # 情況 B: API 只給到已結算的 (例如 14:20) -> 取最後一根 (-1)
                 last_completed = df.iloc[-1]
                 idx_used = -1
 
@@ -121,44 +122,43 @@ class StrategyManager:
             # 轉換時間顯示方便除錯
             kline_time_str = datetime.fromtimestamp(int(last_completed['time'])/1000).strftime('%H:%M')
             
-            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準 (取idx {idx_used}, 時間{kline_time_str}): {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
+            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準 (取idx {idx_used}, K線時間{kline_time_str}): {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
     def on_tick(self, interval, current_price):
-            if interval != "MINUTE_1": 
-                return
-                
-            now = datetime.now()
+        if interval != "MINUTE_1": 
+            return
             
-            # 冷卻時間檢查
-            if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
-                return 
+        now = datetime.now()
+        
+        # 冷卻時間檢查
+        if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
+            return 
 
-            if self.history_df.empty:
-                return
+        if self.history_df.empty:
+            return
+        
+        # --- 計算即時 RSI ---
+        closes = self.history_df['close'].copy()
+        temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
+        
+        rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
+        if rsi_series is None or len(rsi_series) == 0:
+            return
             
-            # --- 計算即時 RSI ---
-            closes = self.history_df['close'].copy()
-            temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
-            
-            rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
-            if rsi_series is None or len(rsi_series) == 0:
-                return
-                
-            real_time_rsi = rsi_series.iloc[-1]
+        real_time_rsi = rsi_series.iloc[-1]
 
-            # 取得布林通道上軌
-            latest_history = self.history_df.iloc[-1]
-            bb_col = self._get_bbu_col_name(self.history_df)
-            bb_upper = latest_history[bb_col] if bb_col else 999999
+        # 取得布林通道上軌
+        latest_history = self.history_df.iloc[-1]
+        bb_col = self._get_bbu_col_name(self.history_df)
+        bb_upper = latest_history[bb_col] if bb_col else 999999
 
-            # --- 策略邏輯 ---
-            is_breakout = current_price > self.prev_high
-            
-            is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
-            
-            if is_breakout and is_overextended:
-                reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up"
-                self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
+        # --- 策略邏輯 ---
+        is_breakout = current_price > self.prev_high
+        is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
+        
+        if is_breakout and is_overextended:
+            reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up"
+            self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
 
     def execute_trade_logic(self, price, direction, reason, rsi_val):
         print(f"⚡ 觸發交易訊號: {direction} @ {price} | 原因: {reason}")
@@ -222,12 +222,10 @@ def should_refresh_data(last_refresh_time):
     # 且 秒數 < 10 (避免過了太久還在重複觸發，雖然有 last_refresh_time 保護)
     
     if p_type == "MINUTE":
-        # 例如 30分K: 10:30:02 觸發
         if (minutes % p_val == 0) and (2 <= seconds <= 10):
             is_time_to_refresh = True
             
     elif p_type == "HOUR":
-        # 例如 4小時K: 08:00:02 觸發
         if (hours % p_val == 0) and (minutes == 0) and (2 <= seconds <= 10):
             is_time_to_refresh = True
             
@@ -235,7 +233,7 @@ def should_refresh_data(last_refresh_time):
     if is_time_to_refresh and (time.time() - last_refresh_time > 60):
         return True
         
-    # 保底機制：超過 15 分鐘強制更新 (這部分可以保留，防止 WebSocket 沒觸發時的保險)
+    # 保底機制：超過 15 分鐘強制更新
     if time.time() - last_refresh_time > 900:
         return True
         
@@ -257,7 +255,7 @@ if __name__ == "__main__":
         # 心跳顯示 (每 30 秒)
         if time.time() - last_heartbeat_time > 30:
             current_rsi = 0
-            current_bb_upper = 0 # [修正] 初始化變數
+            current_bb_upper = 0 # [保留] 初始化變數
             
             if not strategy.history_df.empty:
                 closes = strategy.history_df['close'].copy()
@@ -266,7 +264,7 @@ if __name__ == "__main__":
                 if rsi_s is not None:
                     current_rsi = rsi_s.iloc[-1]
                 
-                # [修正] 取得當前布林上軌
+                # [保留] 取得當前布林上軌
                 bb_col = strategy._get_bbu_col_name(strategy.history_df)
                 if bb_col:
                     current_bb_upper = strategy.history_df.iloc[-1][bb_col]
