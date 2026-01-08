@@ -1,18 +1,16 @@
 import time
 import pandas as pd
 import pandas_ta as ta
-import google.generativeai as genai  # 新增
 import json
 from datetime import datetime, timedelta
-
+from google import genai  # 新增
 from exchange_client import WeexClient
 from market_stream import MarketStream
 import config
 from ai_logger import save_local_log
 
 # 初始化 Gemini AI (新增)
-genai.configure(api_key=config.GEMINI_API_KEY)
-ai_model = genai.GenerativeModel(config.GEMINI_MODEL)
+ai_client = genai.Client(api_key=config.GEMINI_API_KEY)
 
 # 仍然保留這兩個方便調用的常數，但指向 Config
 SYMBOL = config.SYMBOL
@@ -74,7 +72,10 @@ class StrategyManager:
         請以 JSON 格式回傳，包含 action ("SHORT" 或 "WAIT")、confidence (0-1) 與 explanation (一段100字內中文理由)。
         """
         try:
-            response = ai_model.generate_content(prompt)
+            response = ai_client.models.generate_content(
+                model=config.GEMINI_MODEL, 
+                contents=prompt
+            )
             clean_json = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(clean_json)
         except Exception as e:
