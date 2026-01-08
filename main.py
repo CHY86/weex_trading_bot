@@ -29,7 +29,7 @@ class StrategyManager:
 
     def refresh_history(self):
         """根據 Config 設定的週期抓取歷史數據"""
-        print(f"🔄 正在更新 {STRATEGY_INTERVAL} 歷史數據...")
+        print(f"🔄 正在更新 {SYMBOL} {STRATEGY_INTERVAL} 歷史數據...")
         
         now_ms = int(time.time() * 1000)
         raw_klines = self.client.get_history_candles(
@@ -63,7 +63,7 @@ class StrategyManager:
             self.prev_high = last_completed['high']
             self.prev_low = last_completed['low']
             rsi_val = last_completed['RSI']
-            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: 前高={self.prev_high}, RSI={rsi_val:.2f}")
+            print(f"📊 {SYMBOL} [{STRATEGY_INTERVAL}] 策略基準: 前高={self.prev_high}, RSI={rsi_val:.2f}")
 
     def on_tick(self, interval, current_price):
         if interval != "MINUTE_1": 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 if rsi_s is not None:
                     current_rsi = rsi_s.iloc[-1]
 
-            print(f"💓 [監控中] {config.STRATEGY_INTERVAL} | 現價: {price} | 即時RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT})")
+            print(f"💓 [監控中] {SYMBOL}  {config.STRATEGY_INTERVAL} | 現價: {price} | 即時RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT})")
             last_heartbeat_time = time.time()
 
         if should_refresh_data(last_update_time):
