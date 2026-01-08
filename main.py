@@ -89,7 +89,11 @@ class StrategyManager:
             # 解析回傳內容
             content = response.choices[0].message.content
             clean_json = content.replace('```json', '').replace('```', '').strip()
-            return json.loads(clean_json)
+
+            # [新增] 解析並列印 AI 回覆
+            ai_decision = json.loads(clean_json)
+            print(f"🤖 [AI 思考結果] {json.dumps(ai_decision, ensure_ascii=False)}")
+            return ai_decision
                 
         except Exception as e:
             print(f"❌ OpenAI 諮詢出錯: {e}")
