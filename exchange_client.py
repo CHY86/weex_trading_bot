@@ -9,8 +9,8 @@ from datetime import datetime
 import config
 from ai_logger import save_local_log
 
-# ... (ClientOrderIdGenerator 保持不變) ...
 class ClientOrderIdGenerator:
+    """生成唯一的訂單 ID，避免重複下單"""
     def __init__(self, machine_id: int):
         self.machine_id = f"{machine_id:02d}"
         self.lock = Lock()
@@ -82,58 +82,128 @@ class WeexClient:
             print(f"❌ API Request Failed: {e}")
             return None
 
+    # --- 工具函數 ---
+
     def _map_interval(self, interval):
-            """將 WebSocket 用的 interval 字串映射為 REST API 格式"""
-            mapping = {
-                "MINUTE_1": "1m",
-                "MINUTE_5": "5m",
-                "MINUTE_15": "15m",
-                "MINUTE_30": "30m",   # [重點] 確保有這個
-                "HOUR_1": "1h",
-                "HOUR_4": "4h",
-                "HOUR_12": "12h"
-            }
-            return mapping.get(interval, "1m") # 預設 1m
+        """將 WebSocket 用的 interval 字串映射為 REST API 格式"""
+        mapping = {
+            "MINUTE_1": "1m",
+            "MINUTE_5": "5m",
+            "MINUTE_15": "15m",
+            "MINUTE_30": "30m",
+            "HOUR_1": "1h",
+            "HOUR_4": "4h",
+            "HOUR_12": "12h"
+        }
+        return mapping.get(interval, "1m") # 預設 1m
 
-    # --- [修正] 歷史 K 線功能 (根據官方文件) ---
-
-    def get_history_candles(self, symbol, granularity, start_time=None, end_time=None, limit=100):
-        # 注意: 根據文件，endpoint 區分大小寫
-        endpoint = "/capi/v2/market/historyCandles"
-        
-        query = f"?symbol={symbol}&granularity={granularity}&limit={limit}"
-        
-        if end_time:
-            query += f"&endTime={end_time}"
-        elif start_time:
-            query += f"&startTime={start_time}"
-            
-        # 取得完整回應
-        response = self._send_request("GET", endpoint, query)
-        
-        # [修正點] 針對回傳格式進行彈性處理
-        # 情況 A: 回傳直接是 List [[time, open...], ...] (根據 HTML 文件)
-        if isinstance(response, list):
-            return response
-            
-        # 情況 B: 回傳是 Dict 且有 "data" (標準 API 格式)
-        if isinstance(response, dict) and "data" in response:
-            return response["data"]
-            
-        # 情況 C: 錯誤或無資料
-        print(f"⚠️ 警告: K 線回傳格式不如預期或為空: {str(response)[:100]}")
-        return []
-
+    # --- K 線與行情 ---
+    
     def get_server_time(self):
         return self._send_request("GET", "/capi/v2/market/time", "?symbol=" + config.SYMBOL)
 
-    def get_account_assets(self):
-        return self._send_request("GET", "/capi/v2/account/assets")
+    def get_history_candles(self, symbol, granularity, start_time=None, end_time=None, limit=100):
+        """獲取歷史 K 線"""
+        endpoint = "/capi/v2/market/historyCandles"
+        query = f"?symbol={symbol}&granularity={granularity}&limit={limit}"
+        if end_time: query += f"&endTime={end_time}"
+        elif start_time: query += f"&startTime={start_time}"
         
+        response = self._send_request("GET", endpoint, query)
+        
+        # 兼容 List 或 Dict 回傳格式
+        if isinstance(response, list): return response
+        if isinstance(response, dict) and "data" in response: return response["data"]
+        return []
+
+    # --- 帳戶與訂單查詢 (根據 PDF 文件實作) ---
+
+    def get_account_assets(self):
+        """查詢帳戶資產"""
+        return self._send_request("GET", "/capi/v2/account/assets")
+
+    def get_open_orders(self, symbol=None, order_id=None, start_time=None, end_time=None, limit=100, page=1):
+        """
+        查詢當前掛單 (Get Current Orders)
+        Ref: get_current_order.pdf
+        """
+        symbol = symbol or config.SYMBOL
+        endpoint = "/capi/v2/order/current"
+        query = f"?symbol={symbol}&limit={limit}&page={page}"
+        
+        if order_id: query += f"&orderId={order_id}"
+        if start_time: query += f"&startTime={start_time}"
+        if end_time: query += f"&endTime={end_time}"
+        
+        response = self._send_request("GET", endpoint, query)
+        if response and "data" in response:
+            return response["data"]
+        return []
+
+    def get_history_orders(self, symbol=None, page_size=20, create_date=None, end_create_date=None):
+        """
+        查詢歷史訂單 (Get History Orders)
+        Ref: get_history_order.pdf
+        注意: 查詢範圍必須 <= 90 天
+        """
+        symbol = symbol or config.SYMBOL
+        endpoint = "/capi/v2/order/history"
+        query = f"?symbol={symbol}&pageSize={page_size}"
+        
+        # PDF 參數名為 createDate, endCreateDate
+        if create_date: query += f"&createDate={create_date}"
+        if end_create_date: query += f"&endCreateDate={end_create_date}"
+        
+        response = self._send_request("GET", endpoint, query)
+        if response and "data" in response:
+            data = response["data"]
+            # 兼容分頁結構
+            if isinstance(data, dict) and "list" in data:
+                return data["list"]
+            return data
+        return []
+
+    def get_fills(self, symbol=None, order_id=None, start_time=None, end_time=None, limit=100):
+        """
+        查詢成交明細 (Get Fills)
+        Ref: get_fills.pdf
+        """
+        symbol = symbol or config.SYMBOL
+        endpoint = "/capi/v2/order/fills"
+        query = f"?symbol={symbol}&limit={limit}"
+        
+        if order_id: query += f"&orderId={order_id}"
+        if start_time: query += f"&startTime={start_time}"
+        if end_time: query += f"&endTime={end_time}"
+        
+        response = self._send_request("GET", endpoint, query)
+        if response and "data" in response:
+            data = response["data"]
+            if isinstance(data, dict) and "list" in data:
+                return data["list"]
+            return data
+        return []
+
+    def get_order_detail(self, order_id):
+        """
+        查詢單筆訂單詳情 (Get Order Info)
+        Ref: get_order_info.pdf
+        """
+        endpoint = "/capi/v2/order/detail"
+        query = f"?orderId={order_id}"
+        
+        response = self._send_request("GET", endpoint, query)
+        if response and "data" in response:
+            return response["data"]
+        return None
+
+    # --- 交易執行 ---
+
     def place_order(self, side, size, price=None, match_price="0", order_type="0", 
                     client_oid=None, preset_take_profit=None, preset_stop_loss=None, margin_mode=None, extra_params=None):
         endpoint = "/capi/v2/order/placeOrder"
         client_oid = client_oid or self.id_gen.generate()
+        
         if str(match_price) == "0" and not price:
             raise ValueError("Limit order requires price")
             
@@ -154,14 +224,32 @@ class WeexClient:
         print(f"🚀 下單: 方向={side} | 數量={size} | 價格={price}")
         return self._send_request("POST", endpoint, body_dict=body)
 
+    def cancel_all_orders(self):
+        """撤銷所有訂單"""
+        endpoint = "/capi/v2/order/cancelAllOrders"
+        body = {"symbol": config.SYMBOL} 
+        return self._send_request("POST", endpoint, body_dict=body)
+
+    def cancel_batch_orders(self, order_ids=None, client_oids=None):
+        """
+        批量撤單 (Batch Cancel)
+        Ref: batch_cancel_order.pdf
+        """
+        endpoint = "/capi/v2/order/cancel_batch_orders"
+        body = {}
+        if order_ids: body["ids"] = order_ids
+        if client_oids: body["cids"] = client_oids
+            
+        return self._send_request("POST", endpoint, body_dict=body)
+
     def upload_ai_log(self, stage, model, input_data, output_data, explanation, order_id=None):
-        # [新增] 檢查 Config 開關
         if not getattr(config, 'ENABLE_AI_LOG', True):
-            print(f"🚫 [AI Log 跳過] {explanation[:30]}... (Config已關閉)")
-            return None # 直接返回，不發送請求
+            print(f"🚫 [AI Log 跳過] Config 已關閉上傳")
+            return None
 
         endpoint = "/capi/v2/order/uploadAiLog"
         save_local_log(stage, model, input_data, output_data, explanation, order_id)
+        
         body = {
             "stage": str(stage),
             "model": str(model),
@@ -170,5 +258,6 @@ class WeexClient:
             "explanation": str(explanation)
         }
         if order_id: body["orderId"] = str(order_id)
+        
         print(f"📝 上傳 AI Log: {explanation[:30]}...")
         return self._send_request("POST", endpoint, body_dict=body)
