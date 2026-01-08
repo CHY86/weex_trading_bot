@@ -275,46 +275,41 @@ class StrategyManager:
             if ai_res["action"] == "SHORT" and ai_res["confidence"] >= config.AI_CONFIDENCE_THRESHOLD:
                 self.execute_trade_logic(current_price, "SHORT", ai_res["explanation"], real_time_rsi)
 
-    def execute_trade_logic(self, price, direction, reason, rsi_val):
-        print(f"⚡ 觸發交易訊號: {direction} @ {price} | 原因: {reason}")
+    def execute_trade(self, price, direction, reason, rsi, bb_up, history_context):
+        print(f"⚡ 下單訊號: {direction} @ {price} | {reason}")
         
+        # [更新] 將完整的歷史上下文寫入 Log input_data
         self.client.upload_ai_log(
-            stage="Signal Generation",
-            model="PlanB_Algo_v1",
-            input_data={"price": price, "rsi": rsi_val},
+            stage="Strategy Generation",
+            model=config.OPENAI_MODEL,
+            input_data={
+                "price": price, 
+                "rsi": rsi, 
+                "bb_upper": bb_up, 
+                "history_context": history_context  # 記錄給 AI 的那 30 筆 K 線
+            },
             output_data={"decision": direction},
             explanation=reason
         )
         
-        # 下單邏輯 (帶止損止盈)
-        tp_price = int(price * 0.985) 
-        sl_price = int(price * 1.02)
-
+        tp = str(int(price * 0.985))
+        sl = str(int(price * 1.02))
         try:
-            order = self.client.place_order(
-                side=2, # 開空
-                size="0.01",
-                match_price="1", # 市價
-                preset_take_profit=str(tp_price),
-                preset_stop_loss=str(sl_price),
-                margin_mode=1
-            )
-            
-            if order and 'data' in order and 'orderId' in order['data']:
+            order = self.client.place_order(side=2, size="0.01", match_price="1", 
+                                          preset_take_profit=tp, preset_stop_loss=sl, margin_mode=1)
+            if order and order.get('data'):
                 self.last_trade_time = datetime.now()
-                print(f"✅ 下單成功! OrderID: {order['data']['orderId']}")
-                
+                oid = order['data']['orderId']
+                print(f"✅ 下單成功: {oid}")
                 self.client.upload_ai_log(
-                    stage="Execution",
-                    model="PlanB_Algo_v1",
-                    input_data={"order": "MARKET SHORT"},
+                    stage="Execution", model=config.OPENAI_MODEL,
+                    input_data={"order": "MARKET SHORT", "history_at_execution": history_context}, 
                     output_data=order,
-                    explanation="Executed short per Plan B logic.",
-                    order_id=order['data']['orderId']
+                    explanation=f"Executed by AI: {reason}", order_id=oid
                 )
         except Exception as e:
             print(f"❌ 下單失敗: {e}")
-
+            
 # --- 智慧判斷換線邏輯 ---
 def should_refresh_data(last_refresh_time):
     """
