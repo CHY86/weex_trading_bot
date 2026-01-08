@@ -156,7 +156,7 @@ def show_positions(client):
     else:
         print("✅ 無持倉。")
 
-# --- [新增功能 1] 查看帳戶詳情 (含槓桿) ---
+# --- 查看帳戶詳情 (含槓桿) ---
 def check_account_detail(client):
     print(f"\n🔍 正在獲取 {config.SYMBOL} 帳戶詳情...")
     res = client.get_account_detail(coin="USDT")
@@ -232,7 +232,7 @@ def check_account_detail(client):
     else:
         print(f"❌ 無法獲取詳細資訊，API 回傳內容: {res}")
 
-# --- [新增功能 2] 調整槓桿 ---
+# --- 調整槓桿 ---
 def modify_leverage(client):
     print(f"\n🔧 準備調整 {config.SYMBOL} 的槓桿設定")
     print("注意：此操作預設使用「全倉模式 (Cross)」進行調整。")
@@ -256,6 +256,53 @@ def modify_leverage(client):
     except Exception as e:
         print(f"❌ 發生錯誤: {e}")
 
+# --- 一鍵平倉---
+def close_all_positions_ui(client):
+    print(f"\n🚨 [危險操作] 一鍵平倉 (Market Close All)")
+    print(f"1. 僅平倉當前交易對 ({config.SYMBOL})")
+    print(f"2. 平倉帳戶內【所有】交易對 (ALL Symbols)")
+    print("0. 取消")
+    
+    choice = input("請選擇範圍 (1/2/0): ").strip()
+    
+    target_symbol = None
+    if choice == '1':
+        target_symbol = config.SYMBOL
+        print(f"⚠️  警告：即將以【市價】平倉 {target_symbol} 的所有持倉！")
+    elif choice == '2':
+        target_symbol = None
+        print(f"⚠️  警告：即將以【市價】平倉【整個帳戶】的所有持倉！")
+    else:
+        print("已取消。")
+        return
+
+    # 二次確認防止誤觸
+    confirm = input("請輸入 'YES' 確認執行: ")
+    if confirm == 'YES':
+        print("🚀 正在發送平倉請求...")
+        res = client.close_all_positions(symbol=target_symbol)
+        
+        # 解析回傳結果 (API 回傳的是一個 List)
+        if isinstance(res, list):
+            print("\n✅ 執行結果:")
+            for item in res:
+                pid = item.get('positionId')
+                is_success = item.get('success')
+                err_msg = item.get('errorMessage')
+                oid = item.get('successOrderId')
+                
+                status_icon = "🟢 成功" if is_success else "🔴 失敗"
+                detail = f"Order ID: {oid}" if is_success else f"原因: {err_msg}"
+                print(f"  • 持倉ID {pid}: {status_icon} | {detail}")
+                
+        elif isinstance(res, dict) and 'msg' in res:
+             # 若 API 直接回傳錯誤物件
+             print(f"❌ API 回傳訊息: {res.get('msg')}")
+        else:
+             print(f"❓ 未知回傳格式: {res}")
+    else:
+        print("❌ 未輸入 YES，操作取消。")
+
 def main():
     client = WeexClient()
     while True:
@@ -268,6 +315,7 @@ def main():
         print("4. 📊 查詢當前倉位 (Positions)")
         print("5. ℹ️  查看帳戶詳情 & 槓桿")
         print("6. 🔧 調整槓桿倍數 ")
+        print("7. 🚨 一鍵全平倉 (Close All) [NEW]")
         print("Q. 🚪 離開 (Quit)")
         
         choice = input("\n請輸入選項 (1-6/Q): ").upper().strip()
@@ -278,6 +326,7 @@ def main():
         elif choice == '4': show_positions(client)
         elif choice == '5': check_account_detail(client)
         elif choice == '6': modify_leverage(client)
+        elif choice == '7': close_all_positions_ui(client)
         elif choice == 'Q': break
         else: print("⚠️ 無效輸入")
         

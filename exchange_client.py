@@ -214,6 +214,20 @@ class WeexClient:
         # [修正] POST 請求的內容必須透過 body_dict 參數傳遞，而非 query_params
         return self._send_request("POST", endpoint, body_dict=body)
     
+    def close_all_positions(self, symbol=None):
+        """
+        一鍵平倉 (Close All Positions)
+        POST /capi/v2/order/closePositions
+        symbol: 若不傳則平倉所有交易對
+        """
+        endpoint = "/capi/v2/order/closePositions"
+        body = {}
+        if symbol:
+            body["symbol"] = symbol
+            
+        # 發送 POST 請求
+        return self._send_request("POST", endpoint, body_dict=body)
+
     # --- 交易執行 (保持不變) ---
     def place_order(self, side, size, price=None, match_price="0", order_type="0", 
                     client_oid=None, preset_take_profit=None, preset_stop_loss=None, margin_mode=None, extra_params=None):
