@@ -228,6 +228,24 @@ class WeexClient:
         # 發送 POST 請求
         return self._send_request("POST", endpoint, body_dict=body)
 
+    def cancel_all_orders(self, symbol=None, cancel_order_type="normal"):
+        """
+        撤銷所有掛單 (Cancel All Orders)
+        POST /capi/v2/order/cancelAllOrders
+        
+        symbol: 若不傳則撤銷所有交易對的掛單
+        cancelOrderType: 'normal' (普通單) or 'plan' (計畫單)
+        """
+        endpoint = "/capi/v2/order/cancelAllOrders"
+        body = {
+            "cancelOrderType": cancel_order_type
+        }
+        if symbol:
+            body["symbol"] = symbol
+            
+        # 發送 POST 請求
+        return self._send_request("POST", endpoint, body_dict=body)
+
     # --- 交易執行 (保持不變) ---
     def place_order(self, side, size, price=None, match_price="0", order_type="0", 
                     client_oid=None, preset_take_profit=None, preset_stop_loss=None, margin_mode=None, extra_params=None):

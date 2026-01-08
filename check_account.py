@@ -303,6 +303,51 @@ def close_all_positions_ui(client):
     else:
         print("❌ 未輸入 YES，操作取消。")
 
+def cancel_all_orders_ui(client):
+    print(f"\n🗑️  [操作] 撤銷所有掛單 (Cancel All Orders)")
+    print(f"1. 僅撤銷當前交易對 ({config.SYMBOL}) 的普通掛單")
+    print(f"2. 撤銷帳戶內【所有】交易對的普通掛單")
+    print("0. 取消")
+    
+    choice = input("請選擇範圍 (1/2/0): ").strip()
+    
+    target_symbol = None
+    if choice == '1':
+        target_symbol = config.SYMBOL
+        print(f"⚠️  準備撤銷 {target_symbol} 的所有普通掛單...")
+    elif choice == '2':
+        target_symbol = None
+        print(f"⚠️  準備撤銷【所有交易對】的普通掛單...")
+    else:
+        print("已取消。")
+        return
+
+    # 二次確認
+    confirm = input("請輸入 'YES' 確認執行: ")
+    if confirm == 'YES':
+        print("🚀 正在發送撤單請求...")
+        # 預設撤銷 normal (普通限價/市價單)
+        res = client.cancel_all_orders(symbol=target_symbol, cancel_order_type="normal")
+        
+        # 解析回傳結果
+        if isinstance(res, list):
+            if not res:
+                print("✅ 指令已發送 (無回傳內容，可能無掛單可撤)")
+            else:
+                print(f"\n✅ 成功撤銷 {len(res)} 筆訂單:")
+                for item in res:
+                    oid = item.get('orderId')
+                    is_success = item.get('success')
+                    status_icon = "🟢 成功" if is_success else "🔴 失敗"
+                    print(f"  • OrderID {oid}: {status_icon}")
+                    
+        elif isinstance(res, dict) and 'msg' in res:
+             print(f"❌ API 回傳訊息: {res.get('msg')}")
+        else:
+             print(f"❓ API 回傳格式: {res}")
+    else:
+        print("❌ 未輸入 YES，操作取消。")
+
 def main():
     client = WeexClient()
     while True:
@@ -316,6 +361,7 @@ def main():
         print("5. ℹ️  查看帳戶詳情 & 槓桿")
         print("6. 🔧 調整槓桿倍數 ")
         print("7. 🚨 一鍵全平倉 (Close All) [NEW]")
+        print("8. 🗑️  撤銷所有掛單 (Cancel Orders) [NEW]")
         print("Q. 🚪 離開 (Quit)")
         
         choice = input("\n請輸入選項 (1-6/Q): ").upper().strip()
@@ -327,6 +373,7 @@ def main():
         elif choice == '5': check_account_detail(client)
         elif choice == '6': modify_leverage(client)
         elif choice == '7': close_all_positions_ui(client)
+        elif choice == '8': cancel_all_orders_ui(client)
         elif choice == 'Q': break
         else: print("⚠️ 無效輸入")
         
