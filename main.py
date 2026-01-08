@@ -62,37 +62,79 @@ class StrategyManager:
         return None
 
     def consult_ai_agent(self, market_data):
-        """[修改] 諮詢 OpenAI GPT-4o-mini"""
+        """諮詢 OpenAI GPT-4o-mini (傳入歷史 K 線增強分析深度)"""
         if not config.ENABLE_AI_DECISION:
             return {"action": "GO", "confidence": 1.0, "explanation": "Manual logic"}
 
-        prompt = f"""
-        你是一位專業交易員。分析以下數據並決定是否執行 SHORT (做空)。
-        數據: {config.SYMBOL}, 價格: {market_data['price']}, RSI: {market_data['rsi']:.2f}, 布林上軌: {market_data['bb_upper']:.2f}
-        請務必回傳純 JSON 格式 (不要 Markdown)，包含:
-        - "action": "SHORT" 或 "WAIT"
-        - "confidence": 0.0 到 1.0
-        - "explanation": 100字內中文理由
-        """
+        # 1. 準備最近 30 筆 K 線數據
         try:
-            # [修改] OpenAI ChatCompletion 呼叫
+            # 複製最近 30 筆數據以免影響原始資料
+            recent_df = self.history_df.tail(30).copy()
+            
+            # 轉換時間戳為易讀格式 (HH:MM)
+            recent_df['time_str'] = pd.to_datetime(recent_df['time'], unit='ms').dt.strftime('%H:%M')
+            
+            # 找出布林上軌欄位名稱
+            bb_cols = [c for c in recent_df.columns if str(c).startswith(f'BBU_{config.BB_LENGTH}')]
+            bb_col = bb_cols[0] if bb_cols else 'close' # 防呆
+            
+            # 篩選要給 AI 看的欄位
+            cols_to_show = ['time_str', 'open', 'high', 'low', 'close', 'RSI', bb_col]
+            
+            # 轉為字串表格 (類似 CSV 格式)
+            history_str = recent_df[cols_to_show].to_string(index=False)
+            
+        except Exception as e:
+            print(f"⚠️ 數據整理失敗: {e}")
+            history_str = "歷史數據提取失敗"
+
+        # 2. 建構深度 Prompt
+        system_prompt = """
+        你是一位在加密貨幣市場擁有 20 年經驗的資深量化交易員。
+        你擅長識別價格行為 (Price Action)、K線型態 (Candlestick Patterns) 與假突破 (Fakeouts)。
+        你的任務是根據提供的歷史數據與當前快照，判斷是否進行「做空 (SHORT)」操作。
+        """
+
+        user_prompt = f"""
+        交易對: {config.SYMBOL} ({config.STRATEGY_INTERVAL})
+        
+        【當前市場快照】
+        - 現價: {market_data['price']}
+        - 即時 RSI: {market_data['rsi']:.2f}
+        - 布林通道上軌: {market_data['bb_upper']:.2f}
+        
+        【最近 30 根 K 線數據 (包含 RSI 與 BB上軌)】
+        {history_str}
+        
+        【分析要求】
+        1. 觀察最近的價格趨勢：是急漲、緩漲還是高檔震盪？
+        2. 尋找疲弱訊號：是否有長上影線 (Wicks)、吞噬形態 (Engulfing) 或 RSI 背離？
+        3. 判斷布林通道：價格是否過度偏離上軌 (Mean Reversion 機會)？
+        
+        請以 JSON 格式回傳決策：
+        - "action": "SHORT" (建議做空) 或 "WAIT" (風險過高或訊號不明)
+        - "confidence": 0.0 ~ 1.0 (信心分數)
+        - "explanation": 100字以內的中文分析。**請不要只報數字**，請描述你看到的結構（例如：「連續三根紅K後出現十字星，且RSI高檔鈍化，顯示多頭力竭...」）。
+        """
+
+        try:
             response = ai_client.chat.completions.create(
                 model=config.OPENAI_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a crypto trading assistant. Respond in JSON only."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
-                max_tokens=200
+                temperature=0.6, # 稍微降低隨機性，讓分析更專注
+                max_tokens=300
             )
             
-            # 解析回傳內容
             content = response.choices[0].message.content
             clean_json = content.replace('```json', '').replace('```', '').strip()
-
-            # [新增] 解析並列印 AI 回覆
+            
+            # 解析並列印 AI 回覆
             ai_decision = json.loads(clean_json)
-            print(f"🤖 [AI 思考結果] {json.dumps(ai_decision, ensure_ascii=False)}")
+            print(f"🤖 [AI 深度分析] {json.dumps(ai_decision, ensure_ascii=False)}")
+            
             return ai_decision
                 
         except Exception as e:
