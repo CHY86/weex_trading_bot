@@ -41,15 +41,16 @@ class StrategyManager:
         return None
 
     def refresh_history(self):
-        """根據 Config 設定的週期抓取歷史數據"""
+        """根據 Config 設定的週期抓取歷史數據 (含智慧時間判斷)"""
         print(f"🔄 正在更新 {SYMBOL} {STRATEGY_INTERVAL} 歷史數據...")
         
         now_ms = int(time.time() * 1000)
+        # 建議 limit 設大一點，以免算指標時前面的資料不夠
         raw_klines = self.client.get_history_candles(
             symbol=SYMBOL, 
             granularity=self.client._map_interval(STRATEGY_INTERVAL),
             end_time=now_ms,
-            limit=100
+            limit=200 
         )
         
         if not raw_klines:
@@ -58,6 +59,7 @@ class StrategyManager:
 
         # 整理數據
         df = pd.DataFrame(raw_klines, columns=['time', 'open', 'high', 'low', 'close', 'vol', 'quote_vol'])
+        df['time'] = df['time'].astype(int) # 確保時間是整數
         df['close'] = df['close'].astype(float)
         df['high'] = df['high'].astype(float)
         df['low'] = df['low'].astype(float)
@@ -70,55 +72,56 @@ class StrategyManager:
         
         self.history_df = df
         
-        # 更新策略基準
+        # --- [關鍵修正] 智慧判斷取哪一根 ---
         if len(df) >= 2:
-            last_completed = df.iloc[-2]
+            # 1. 算出「當下時間點」理論上的 K 線開盤時間
+            now = datetime.now()
+            interval_minutes = 0
+            current_candle_start = now
+            
+            # 解析週期計算時間
+            if "MINUTE" in STRATEGY_INTERVAL:
+                interval_minutes = int(STRATEGY_INTERVAL.split('_')[1])
+                # 捨去餘數算法: 例如 14:29, 5分K -> 29%5=4 -> 29-4=25 -> 14:25
+                current_candle_start = now.replace(second=0, microsecond=0)
+                current_candle_start = current_candle_start - timedelta(minutes=current_candle_start.minute % interval_minutes)
+            elif "HOUR" in STRATEGY_INTERVAL:
+                interval_hours = int(STRATEGY_INTERVAL.split('_')[1])
+                current_candle_start = now.replace(minute=0, second=0, microsecond=0)
+                current_candle_start = current_candle_start - timedelta(hours=current_candle_start.hour % interval_hours)
+            
+            # 轉成毫秒時間戳
+            current_candle_ts = int(current_candle_start.timestamp() * 1000)
+            
+            # 取得 API 回傳的最後一根 K 線時間
+            last_kline_ts = int(df.iloc[-1]['time'])
+
+            # 2. 比對邏輯
+            if last_kline_ts == current_candle_ts:
+                # 情況 A: 最後一根的時間 == 當前時段 (代表 API 有給正在跑的那根)
+                # 我們要取的是「上一根已完成」的 -> -2
+                last_completed = df.iloc[-2]
+                idx_used = -2
+            else:
+                # 情況 B: 最後一根的時間 < 當前時段 (代表 API 只給到已結算的)
+                # 例如現在 14:29 (應為 14:25 K線)，但 API 最後一根是 14:20
+                # 這時 14:20 就是我們要的「上一根已完成」 -> -1
+                last_completed = df.iloc[-1]
+                idx_used = -1
+
+            # 設定策略基準
             self.prev_high = last_completed['high']
             self.prev_low = last_completed['low']
             rsi_val = last_completed['RSI']
             
-            # [修正] 動態取得布林上軌值
+            # 取得布林上軌
             bb_col = self._get_bbu_col_name(df)
             bb_upper_val = last_completed[bb_col] if bb_col else 0
             
-            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
-
-    def on_tick(self, interval, current_price):
-        if interval != "MINUTE_1": 
-            return
+            # 轉換時間顯示方便除錯
+            kline_time_str = datetime.fromtimestamp(int(last_completed['time'])/1000).strftime('%H:%M')
             
-        now = datetime.now()
-        
-        # 冷卻時間檢查
-        if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
-            return 
-
-        if self.history_df.empty:
-            return
-        
-        # --- 計算即時 RSI ---
-        closes = self.history_df['close'].copy()
-        temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
-        
-        rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
-        if rsi_series is None or len(rsi_series) == 0:
-            return
-            
-        real_time_rsi = rsi_series.iloc[-1]
-
-        # 取得布林通道上軌
-        latest_history = self.history_df.iloc[-1]
-        bb_col = self._get_bbu_col_name(self.history_df)
-        bb_upper = latest_history[bb_col] if bb_col else 999999
-
-        # --- 策略邏輯 ---
-        is_breakout = current_price > self.prev_high
-        
-        is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
-        
-        if is_breakout and is_overextended:
-            reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up"
-            self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
+            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準 (取idx {idx_used}, 時間{kline_time_str}): {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
     def execute_trade_logic(self, price, direction, reason, rsi_val):
         print(f"⚡ 觸發交易訊號: {direction} @ {price} | 原因: {reason}")
