@@ -69,8 +69,10 @@ def show_open_orders(client):
     print(pd.DataFrame(data_list).to_string(index=False))
 
 def show_history_orders(client):
-    print(f"\n📜 [歷史訂單 - 近20筆] (交易對: {config.SYMBOL})")
-    orders = client.get_history_orders(symbol=config.SYMBOL, page_size=20)
+    page_size = input(f"請輸入顯示筆數 (例如 10, 20): ").strip()
+
+    print(f"\n📜 [歷史訂單 - 近{page_size}筆] (交易對: {config.SYMBOL})")
+    orders = client.get_history_orders(symbol=config.SYMBOL, page_size=page_size)
     if not orders:
         print("📭 無歷史紀錄。")
         return
