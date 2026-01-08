@@ -94,9 +94,8 @@ def show_history_orders(client):
 
 # --- [新增] 顯示倉位函式 ---
 def show_positions(client):
-    print(f"\n📊 [當前持倉] (交易對: {config.SYMBOL})")
+    print(f"\n📊 [當前持倉詳情] (交易對: {config.SYMBOL})")
     
-    # 呼叫 API (只過濾出 config.SYMBOL 的倉位)
     positions = client.get_all_positions(symbol=config.SYMBOL)
     
     if not positions:
@@ -105,47 +104,49 @@ def show_positions(client):
 
     data_list = []
     for p in positions:
-        # 根據 Get_all_position.pdf 解析欄位
-        # 注意: 如果持倉量是 0，通常代表沒倉位 (有些交易所會回傳空倉資料)
-        # 這裡我們假設 API 回傳的就是有意義的倉位
+        # 1. 基礎資訊
+        side = p.get('side', '') 
+        if side == 'LONG': side = '🟢 多'
+        elif side == 'SHORT': side = '🔴 空'
         
-        # 方向
-        side = p.get('side', '') # LONG / SHORT
-        if side == 'LONG': side = '🟢 多單'
-        elif side == 'SHORT': side = '🔴 空單'
-        
-        # 槓桿
         leverage = p.get('leverage', '-')
-        
-        # 開倉均價
-        open_price = float(p.get('open_avg_price', 0) or p.get('open_price', 0))
-        
-        # 未結盈虧
-        unrealized = float(p.get('unrealized_pnl', 0))
-        
-        # 預估強平價
-        liqz_price = p.get('liquidate_price', '-')
-        
-        # 持倉數量 (這欄位名稱各家不同，常見有 hold_vol, size, current_amount)
-        # 根據 snippet，可能是 hold_vol 或 cum_open_size - cum_close_size
-        # 這裡嘗試讀取常見欄位
         size = p.get('hold_vol') or p.get('size') or p.get('current_amount') or 0
         
+        # 2. 價格資訊
+        open_price = float(p.get('open_avg_price', 0) or p.get('open_price', 0))
+        liqz_price = p.get('liquidate_price', '-')
+        
+        # 3. 盈虧與資金 (根據 PDF 補充更多欄位)
+        unrealized = float(p.get('unrealized_pnl', 0)) # 未結盈虧
+        margin_size = p.get('marginSize', 0)           # 持倉保證金
+        funding_fee = p.get('funding_fee', 0)          # 待結算資金費
+        cum_funding = p.get('cum_funding_fee', 0)      # 累計已付資金費
+        
+        # 4. 時間與模式
+        create_time = timestamp_to_str(p.get('created_time') or p.get('cTime'))
+        mode = p.get('margin_mode', '-') # SHARED/ISOLATED
+        if mode == 'SHARED': mode = '全倉'
+        elif mode == 'ISOLATED': mode = '逐倉'
+
         data_list.append({
             "方向": side,
             "槓桿": f"x{leverage}",
             "數量": size,
-            "開倉價": open_price,
-            "未結盈虧 (UPnL)": unrealized,
-            "強平價": liqz_price,
-            "模式": p.get('margin_mode', '-')
+            "均價": open_price,
+            "強平": liqz_price,
+            "保證金": margin_size,
+            "未結盈虧": f"{unrealized:.2f}",
+            "資金費": funding_fee,
+            "累計資金費": cum_funding,
+            "模式": mode,
+            "開倉時間": create_time
         })
         
     if data_list:
         df = pd.DataFrame(data_list)
         print(df.to_string(index=False))
     else:
-        print("✅ 目前沒有持倉 (API 回傳空列表)。")
+        print("✅ 無持倉。")
 
 def main():
     client = WeexClient()
