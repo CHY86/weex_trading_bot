@@ -27,6 +27,19 @@ class StrategyManager:
         # 初始化數據
         self.refresh_history()
 
+    # --- [新增] 動態取得布林上軌欄位名 ---
+    def _get_bbu_col_name(self, df):
+        """
+        自動尋找 BBU 開頭的欄位，避免 2.0 與 2 的命名差異問題
+        """
+        if df is None or df.empty:
+            return None
+        # 找出所有開頭是 BBU_ 的欄位
+        cols = [c for c in df.columns if str(c).startswith('BBU_')]
+        if cols:
+            return cols[0] # 回傳找到的第一個
+        return None
+
     def refresh_history(self):
         """根據 Config 設定的週期抓取歷史數據"""
         print(f"🔄 正在更新 {SYMBOL} {STRATEGY_INTERVAL} 歷史數據...")
@@ -64,11 +77,9 @@ class StrategyManager:
             self.prev_low = last_completed['low']
             rsi_val = last_completed['RSI']
             
-            # [新增] 取得布林上軌值
-            bb_col_name = f'BBU_{config.BB_LENGTH}_{config.BB_STD}'
-            bb_upper_val = last_completed[bb_col_name]
-            
-            rsi_val = last_completed['RSI']
+            # [修正] 動態取得布林上軌值
+            bb_col = self._get_bbu_col_name(df)
+            bb_upper_val = last_completed[bb_col] if bb_col else 0
             
             print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
@@ -89,7 +100,6 @@ class StrategyManager:
         closes = self.history_df['close'].copy()
         temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
         
-
         rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
         if rsi_series is None or len(rsi_series) == 0:
             return
@@ -98,13 +108,12 @@ class StrategyManager:
 
         # 取得布林通道上軌
         latest_history = self.history_df.iloc[-1]
-        bb_upper_col = f'BBU_{config.BB_LENGTH}_{config.BB_STD}'
-        bb_upper = latest_history.get(bb_upper_col, 999999)
+        bb_col = self._get_bbu_col_name(self.history_df)
+        bb_upper = latest_history[bb_col] if bb_col else 999999
 
         # --- 策略邏輯 ---
         is_breakout = current_price > self.prev_high
         
-
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
         
         if is_breakout and is_overextended:
@@ -208,12 +217,19 @@ if __name__ == "__main__":
         # 心跳顯示 (每 30 秒)
         if time.time() - last_heartbeat_time > 30:
             current_rsi = 0
+            current_bb_upper = 0 # [修正] 初始化變數
+            
             if not strategy.history_df.empty:
                 closes = strategy.history_df['close'].copy()
                 temp_series = pd.concat([closes, pd.Series([price])], ignore_index=True)
                 rsi_s = ta.rsi(temp_series, length=config.RSI_PERIOD)
                 if rsi_s is not None:
                     current_rsi = rsi_s.iloc[-1]
+                
+                # [修正] 取得當前布林上軌
+                bb_col = strategy._get_bbu_col_name(strategy.history_df)
+                if bb_col:
+                    current_bb_upper = strategy.history_df.iloc[-1][bb_col]
 
             print(f"💓 [監控中] {SYMBOL} {config.STRATEGY_INTERVAL} | 現價: {price} | RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT}) | BB上軌: {current_bb_upper:.2f}")            
             last_heartbeat_time = time.time()
