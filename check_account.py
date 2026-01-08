@@ -101,7 +101,6 @@ def show_history_orders(client):
         })
     print(pd.DataFrame(data_list).to_string(index=False))
 
-# --- [新增] 顯示倉位函式 ---
 def show_positions(client):
     print(f"\n📊 [當前持倉詳情] (交易對: {config.SYMBOL})")
     
@@ -125,7 +124,7 @@ def show_positions(client):
         open_price = float(p.get('open_avg_price', 0) or p.get('open_price', 0))
         liqz_price = p.get('liquidate_price', '-')
         
-        # 3. 盈虧與資金 (根據 PDF 補充更多欄位)
+        # 3. 盈虧與資金
         unrealized = float(p.get('unrealized_pnl', 0)) # 未結盈虧
         margin_size = p.get('marginSize', 0)           # 持倉保證金
         funding_fee = p.get('funding_fee', 0)          # 待結算資金費
@@ -157,6 +156,51 @@ def show_positions(client):
     else:
         print("✅ 無持倉。")
 
+# --- [新增功能 1] 查看帳戶詳情 (含槓桿) ---
+def check_account_detail(client):
+    print(f"\n🔍 正在獲取 {config.SYMBOL} 帳戶詳情...")
+    # 這裡呼叫的是 exchange_client.py 裡我們新增的 get_account_detail
+    res = client.get_account_detail(coin="USDT")
+    
+    if res and 'data' in res:
+        acc = res['data']
+        print("-" * 40)
+        print(f"💰 幣種: {acc.get('coin')}")
+        print(f"💵 權益 (Equity): {acc.get('equity')}")
+        print(f"🔓 可用餘額: {acc.get('available')}")
+        print(f"⚡ 當前設定槓桿 (Fixed Leverage): x{acc.get('fixedLeverage', 'N/A')}")
+        
+        mode = acc.get('marginMode')
+        mode_str = '全倉 (Cross)' if mode == 1 else '逐倉 (Isolated)'
+        print(f"🛡️ 保證金模式: {mode_str}")
+        print("-" * 40)
+    else:
+        print("❌ 無法獲取詳細資訊，請確認 exchange_client.py 是否已更新。")
+
+# --- [新增功能 2] 調整槓桿 ---
+def modify_leverage(client):
+    print(f"\n🔧 準備調整 {config.SYMBOL} 的槓桿設定")
+    print("注意：此操作預設使用「全倉模式 (Cross)」進行調整。")
+    
+    new_lev = input(f"請輸入新的槓桿倍數 (例如 10, 20): ").strip()
+    
+    if not new_lev.isdigit():
+        print("⚠️ 請輸入有效的整數數字！")
+        return
+
+    try:
+        # 呼叫 API 調整槓桿
+        res = client.set_leverage(symbol=config.SYMBOL, leverage=int(new_lev), margin_mode=1)
+        
+        if res and res.get('code') == '00000':
+            print(f"✅ 成功！{config.SYMBOL} 槓桿已調整為 x{new_lev}")
+        else:
+            print(f"❌ 調整失敗: {res.get('msg', '未知錯誤')}")
+            # 如果失敗，通常是因為有持倉或掛單，提示使用者
+            print("💡 提示：若有未平倉位或掛單，交易所通常禁止調整槓桿。")
+    except Exception as e:
+        print(f"❌ 發生錯誤: {e}")
+
 def main():
     client = WeexClient()
     while True:
@@ -166,15 +210,19 @@ def main():
         print("1. 💰 查詢資金 (Assets)")
         print("2. 📋 查詢當前掛單 (Open Orders)")
         print("3. 📜 查詢歷史訂單 (History)")
-        print("4. 📊 查詢當前倉位 (Positions) [NEW]")
+        print("4. 📊 查詢當前倉位 (Positions)")
+        print("5. ℹ️  查看帳戶詳情 & 槓桿")
+        print("6. 🔧 調整槓桿倍數 ")
         print("Q. 🚪 離開 (Quit)")
         
-        choice = input("\n請輸入選項 (1-4/Q): ").upper().strip()
+        choice = input("\n請輸入選項 (1-6/Q): ").upper().strip()
         
         if choice == '1': show_assets(client)
         elif choice == '2': show_open_orders(client)
         elif choice == '3': show_history_orders(client)
         elif choice == '4': show_positions(client)
+        elif choice == '5': check_account_detail(client)
+        elif choice == '6': modify_leverage(client)
         elif choice == 'Q': break
         else: print("⚠️ 無效輸入")
         
