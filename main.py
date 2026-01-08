@@ -63,7 +63,8 @@ class StrategyManager:
             self.prev_high = last_completed['high']
             self.prev_low = last_completed['low']
             rsi_val = last_completed['RSI']
-            print(f"📊 {SYMBOL} [{STRATEGY_INTERVAL}] 策略基準: 前高={self.prev_high}, RSI={rsi_val:.2f}")
+            
+            print(f"📊 [{STRATEGY_INTERVAL}] 策略基準: 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值: {config.RSI_OVERBOUGHT})")
 
     def on_tick(self, interval, current_price):
         if interval != "MINUTE_1": 
