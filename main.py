@@ -123,6 +123,43 @@ class StrategyManager:
             
             print(f"📊 [{STRATEGY_INTERVAL}] 策略基準 (取idx {idx_used}, 時間{kline_time_str}): {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
+    def on_tick(self, interval, current_price):
+            if interval != "MINUTE_1": 
+                return
+                
+            now = datetime.now()
+            
+            # 冷卻時間檢查
+            if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
+                return 
+
+            if self.history_df.empty:
+                return
+            
+            # --- 計算即時 RSI ---
+            closes = self.history_df['close'].copy()
+            temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
+            
+            rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
+            if rsi_series is None or len(rsi_series) == 0:
+                return
+                
+            real_time_rsi = rsi_series.iloc[-1]
+
+            # 取得布林通道上軌
+            latest_history = self.history_df.iloc[-1]
+            bb_col = self._get_bbu_col_name(self.history_df)
+            bb_upper = latest_history[bb_col] if bb_col else 999999
+
+            # --- 策略邏輯 ---
+            is_breakout = current_price > self.prev_high
+            
+            is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
+            
+            if is_breakout and is_overextended:
+                reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up"
+                self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
+
     def execute_trade_logic(self, price, direction, reason, rsi_val):
         print(f"⚡ 觸發交易訊號: {direction} @ {price} | 原因: {reason}")
         
