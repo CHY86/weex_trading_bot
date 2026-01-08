@@ -153,26 +153,40 @@ class StrategyManager:
 
 # --- 智慧判斷換線邏輯 ---
 def should_refresh_data(last_refresh_time):
+    """
+    判斷是否該更新歷史資料
+    (增加 2 秒延遲，確保交易所已結算 K 線)
+    """
     now = datetime.now()
     minutes = now.minute
     hours = now.hour
+    seconds = now.second  # [新增] 取得當前秒數
     
+    # 解析 Config (e.g., "MINUTE_30" -> type="MINUTE", val=30)
     parts = STRATEGY_INTERVAL.split('_')
     p_type = parts[0]
     p_val = int(parts[1])
     
     is_time_to_refresh = False
     
+    # 邏輯: 必須整除 (時間到了) 且 秒數 >= 2 (給交易所一點時間)
+    # 且 秒數 < 10 (避免過了太久還在重複觸發，雖然有 last_refresh_time 保護)
+    
     if p_type == "MINUTE":
-        if minutes % p_val == 0:
-            is_time_to_refresh = True
-    elif p_type == "HOUR":
-        if hours % p_val == 0 and minutes == 0:
+        # 例如 30分K: 10:30:02 觸發
+        if (minutes % p_val == 0) and (2 <= seconds <= 10):
             is_time_to_refresh = True
             
+    elif p_type == "HOUR":
+        # 例如 4小時K: 08:00:02 觸發
+        if (hours % p_val == 0) and (minutes == 0) and (2 <= seconds <= 10):
+            is_time_to_refresh = True
+            
+    # 保護機制：距離上次更新至少要過 60 秒 (避免同一分鐘內重複更新)
     if is_time_to_refresh and (time.time() - last_refresh_time > 60):
         return True
         
+    # 保底機制：超過 15 分鐘強制更新 (這部分可以保留，防止 WebSocket 沒觸發時的保險)
     if time.time() - last_refresh_time > 900:
         return True
         
