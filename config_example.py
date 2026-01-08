@@ -32,3 +32,12 @@ ENABLE_AI_LOG = True  # 是否上傳 AI Log
 # config.py
 GEMINI_API_KEY = "您的_GEMINI_API_KEY"
 GEMINI_MODEL = "gemini-2.5-flash-lite" # 使用 Flash-Lite 版本
+
+# --- [新增] 風險控管參數 ---
+MAX_OPEN_ORDERS = 10      # 最多允許幾張掛單 (超過就不再下單)
+MAX_POSITIONS = 1        # 最多允許持有幾個倉位 (避免無限加倉)
+MAX_POSITION_SIZE = 1  # 最大持倉數量 (例如最多持有 0.1 BTC)
+
+# --- [新增] AI 相關設定 (Plan B) ---
+ENABLE_AI_DECISION = True # 是否啟用 AI 輔助判斷
+AI_CONFIDENCE_THRESHOLD = 0.7 # AI 信心分數 > 0.7 才執行

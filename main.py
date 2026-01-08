@@ -26,6 +26,7 @@ class StrategyManager:
         self.client = client
         self.history_df = pd.DataFrame()
         self.last_trade_time = datetime.min
+        self.last_ai_req_time = 0  # [新增] AI 請求冷卻計時器
         self.prev_high = 0.0
         self.prev_low = 0.0
         
@@ -199,7 +200,16 @@ class StrategyManager:
             # 1. 風控檢查 (新增)
             if not self.check_risk_limits(): return
 
-            # 2. AI 最終決策 (新增)
+            # [新增] AI API 頻率限制 (解決 429 錯誤)
+            # 限制每 20 秒最多呼叫一次
+            if (time.time() - self.last_ai_req_time) < 20:
+                print(f"⏳ 條件成立但 AI 冷卻中 (避免 Rate Limit)...")
+                return
+            
+            # 更新 API 呼叫時間
+            self.last_ai_req_time = time.time()
+
+            # 2. AI 最終決策
             ai_res = self.consult_ai_agent({"price": current_price, "rsi": real_time_rsi, "bb_upper": bb_upper})
             
             if ai_res["action"] == "SHORT" and ai_res["confidence"] >= config.AI_CONFIDENCE_THRESHOLD:
