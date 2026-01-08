@@ -3,14 +3,14 @@ import pandas as pd
 import pandas_ta as ta
 import json
 from datetime import datetime, timedelta
-from google import genai  # 新增
+from openai import OpenAI  # [修改] 匯入 OpenAI
 from exchange_client import WeexClient
 from market_stream import MarketStream
 import config
 from ai_logger import save_local_log
 
-# 初始化 Gemini AI (新增)
-ai_client = genai.Client(api_key=config.GEMINI_API_KEY)
+# 初始化 OpenAI Client
+ai_client = OpenAI(api_key=config.OPENAI_API_KEY)
 
 # 仍然保留這兩個方便調用的常數，但指向 Config
 SYMBOL = config.SYMBOL
@@ -62,25 +62,38 @@ class StrategyManager:
         return None
 
     def consult_ai_agent(self, market_data):
-        """[新增] 諮詢 Gemini AI 獲取決策與合規理由"""
+        """[修改] 諮詢 OpenAI GPT-4o-mini"""
         if not config.ENABLE_AI_DECISION:
             return {"action": "GO", "confidence": 1.0, "explanation": "Manual logic"}
 
         prompt = f"""
         你是一位專業交易員。分析以下數據並決定是否執行 SHORT (做空)。
         數據: {config.SYMBOL}, 價格: {market_data['price']}, RSI: {market_data['rsi']:.2f}, 布林上軌: {market_data['bb_upper']:.2f}
-        請以 JSON 格式回傳，包含 action ("SHORT" 或 "WAIT")、confidence (0-1) 與 explanation (一段100字內中文理由)。
+        請務必回傳純 JSON 格式 (不要 Markdown)，包含:
+        - "action": "SHORT" 或 "WAIT"
+        - "confidence": 0.0 到 1.0
+        - "explanation": 100字內中文理由
         """
         try:
-            response = ai_client.models.generate_content(
-                model=config.GEMINI_MODEL, 
-                contents=prompt
+            # [修改] OpenAI ChatCompletion 呼叫
+            response = ai_client.chat.completions.create(
+                model=config.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a crypto trading assistant. Respond in JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200
             )
-            clean_json = response.text.replace('```json', '').replace('```', '').strip()
+            
+            # 解析回傳內容
+            content = response.choices[0].message.content
+            clean_json = content.replace('```json', '').replace('```', '').strip()
             return json.loads(clean_json)
+                
         except Exception as e:
-            print(f"❌ AI 諮詢出錯: {e}")
-            return {"action": "WAIT", "confidence": 0, "explanation": f"API Error: {e}"}
+            print(f"❌ OpenAI 諮詢出錯: {e}")
+            return {"action": "WAIT", "confidence": 0, "explanation": f"API Error: {str(e)}"}
 
     def refresh_history(self):
         """根據 Config 設定的週期抓取歷史數據"""

@@ -6,8 +6,8 @@ websocket-client
 pandas
 pandas-ta
 
-# Google Gemini AI SDK
-google-genai
+
+openai
 
 # 時間處理
 pytz
