@@ -139,7 +139,7 @@ class WeexClient:
         response = self._send_request("GET", "/capi/v2/account/assets")
         return self._extract_data(response)
 
-    def get_open_orders(self, symbol=None, order_id=None, start_time=None, end_time=None, limit=100, page=1):
+    def get_open_orders(self, symbol=None, order_id=None, start_time=None, end_time=None, limit=100, page=0):
         """查詢當前掛單 (修正: 根據 PDF 直接回傳 List)"""
         symbol = symbol or config.SYMBOL
         endpoint = "/capi/v2/order/current"
