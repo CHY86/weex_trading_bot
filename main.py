@@ -1,6 +1,8 @@
 import time
 import pandas as pd
 import pandas_ta as ta
+import google.generativeai as genai  # 新增
+import json
 from datetime import datetime, timedelta
 
 from exchange_client import WeexClient
@@ -8,6 +10,9 @@ from market_stream import MarketStream
 import config
 from ai_logger import save_local_log
 
+# 初始化 Gemini AI (新增)
+genai.configure(api_key=config.GEMINI_API_KEY)
+ai_model = genai.GenerativeModel(config.GEMINI_MODEL)
 
 # 仍然保留這兩個方便調用的常數，但指向 Config
 SYMBOL = config.SYMBOL
@@ -27,7 +32,24 @@ class StrategyManager:
         # 初始化數據
         self.refresh_history()
 
-    # --- [保留] 動態取得布林上軌欄位名 ---
+    def check_risk_limits(self):
+        """[新增] 風險檢查：避免訂單過多或倉位過大"""
+        # 1. 檢查掛單數量
+        open_orders = self.client.get_open_orders(config.SYMBOL)
+        if len(open_orders) >= config.MAX_OPEN_ORDERS:
+            print(f"🚫 [風控攔截] 掛單過多 ({len(open_orders)} 張)，停止下單。")
+            return False
+
+        # 2. 檢查持倉數量
+        # positions = self.client.get_all_positions(config.SYMBOL)
+        # valid_positions = [p for p in positions if float(p.get('hold_vol', 0) or p.get('size', 0)) > 0]
+        # if len(valid_positions) >= config.MAX_POSITIONS:
+        #     print(f"🚫 [風控攔截] 已有倉位 ({len(valid_positions)} 個)，停止下單。")
+        #     return False
+            
+        return True
+
+    # --- 動態取得布林上軌欄位名 ---
     def _get_bbu_col_name(self, df):
         """
         自動尋找 BBU 開頭的欄位，避免 2.0 與 2 的命名差異問題
@@ -39,6 +61,24 @@ class StrategyManager:
         if cols:
             return cols[0] # 回傳找到的第一個
         return None
+
+    def consult_ai_agent(self, market_data):
+        """[新增] 諮詢 Gemini AI 獲取決策與合規理由"""
+        if not config.ENABLE_AI_DECISION:
+            return {"action": "GO", "confidence": 1.0, "explanation": "Manual logic"}
+
+        prompt = f"""
+        你是一位專業交易員。分析以下數據並決定是否執行 SHORT (做空)。
+        數據: {config.SYMBOL}, 價格: {market_data['price']}, RSI: {market_data['rsi']:.2f}, 布林上軌: {market_data['bb_upper']:.2f}
+        請以 JSON 格式回傳，包含 action ("SHORT" 或 "WAIT")、confidence (0-1) 與 explanation (一段100字內中文理由)。
+        """
+        try:
+            response = ai_model.generate_content(prompt)
+            clean_json = response.text.replace('```json', '').replace('```', '').strip()
+            return json.loads(clean_json)
+        except Exception as e:
+            print(f"❌ AI 諮詢出錯: {e}")
+            return {"action": "WAIT", "confidence": 0, "explanation": f"API Error: {e}"}
 
     def refresh_history(self):
         """根據 Config 設定的週期抓取歷史數據"""
@@ -137,31 +177,33 @@ class StrategyManager:
         if self.history_df.empty:
             return
         
-        # --- 計算即時指標 ---
+        # --- 計算即時 RSI ---
         closes = self.history_df['close'].copy()
-        # 建立包含當前價格的臨時序列
         temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
         
-        # 1. 計算即時 RSI
         rsi_series = ta.rsi(temp_series, length=config.RSI_PERIOD)
         if rsi_series is None or len(rsi_series) == 0:
             return
+            
         real_time_rsi = rsi_series.iloc[-1]
 
-        # 2. [修正] 計算即時布林通道 (使用 temp_series 重算)
-        bb_df = ta.bbands(temp_series, length=config.BB_LENGTH, std=config.BB_STD)
-        
-        # 動態取得上軌
-        bb_col = self._get_bbu_col_name(bb_df)
-        bb_upper = bb_df.iloc[-1][bb_col] if bb_col else 999999
+        # 取得布林通道上軌
+        bb_upper_col = f'BBU_{config.BB_LENGTH}_{config.BB_STD}.0'
+        bb_upper = self.history_df.iloc[-1].get(bb_upper_col, 999999)
 
         # --- 策略邏輯 ---
         is_breakout = current_price > self.prev_high
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
         
         if is_breakout and is_overextended:
-            reason = f"RSI({real_time_rsi:.2f}) > {config.RSI_OVERBOUGHT} & Price > BB_Up({bb_upper:.2f})"
-            self.execute_trade_logic(current_price, "SHORT", reason, real_time_rsi)
+            # 1. 風控檢查 (新增)
+            if not self.check_risk_limits(): return
+
+            # 2. AI 最終決策 (新增)
+            ai_res = self.consult_ai_agent({"price": current_price, "rsi": real_time_rsi, "bb_upper": bb_upper})
+            
+            if ai_res["action"] == "SHORT" and ai_res["confidence"] >= config.AI_CONFIDENCE_THRESHOLD:
+                self.execute_trade_logic(current_price, "SHORT", ai_res["explanation"], real_time_rsi)
 
     def execute_trade_logic(self, price, direction, reason, rsi_val):
         print(f"⚡ 觸發交易訊號: {direction} @ {price} | 原因: {reason}")

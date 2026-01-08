@@ -1,4 +1,13 @@
-requests
-websocket-client
-pandas
-pandas_ta
+# 基礎交易所連線
+requests==2.31.0
+websocket-client==1.7.0
+
+# 數據處理與指標
+pandas==2.2.0
+pandas-ta==0.3.14b0
+
+# Google Gemini AI SDK (新增)
+google-generativeai==0.8.3
+
+# 時間處理
+pytz==2024.1

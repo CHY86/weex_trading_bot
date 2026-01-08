@@ -28,3 +28,7 @@ COOLDOWN_HOURS = 2    # 交易冷卻時間(小時)
 
 # 系統設定
 ENABLE_AI_LOG = True  # 是否上傳 AI Log
+
+# config.py
+GEMINI_API_KEY = "您的_GEMINI_API_KEY"
+GEMINI_MODEL = "gemini-2.5-flash-lite" # 使用 Flash-Lite 版本
