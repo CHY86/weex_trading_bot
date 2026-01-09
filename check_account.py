@@ -333,6 +333,7 @@ def cancel_all_orders_ui(client):
         
         # 解析回傳結果
         if isinstance(res, list):
+            print(res)
             if not res:
                 print("✅ 指令已發送 (無回傳內容，可能無掛單可撤)")
             else:
