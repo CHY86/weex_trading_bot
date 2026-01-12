@@ -292,13 +292,10 @@ class StrategyManager:
 
 
     def on_tick(self, interval, current_price):
-        print("--- on_tick debug ---")
-        print(f"收到行情更新: interval={interval}, current_price={current_price}")
         if interval != "MINUTE_1": 
             return
-            
         now = datetime.now()
-        
+        print("1")
         # 冷卻時間檢查
         if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
             return 
@@ -306,6 +303,7 @@ class StrategyManager:
         if self.history_df.empty:
             return
         
+        print("2")
         # --- 計算即時 RSI ---
         closes = self.history_df['close'].copy()
         temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
@@ -315,7 +313,7 @@ class StrategyManager:
             return
             
         real_time_rsi = rsi_series.iloc[-1]
-
+        print("3")
 
 
         # --- 策略邏輯 ---
