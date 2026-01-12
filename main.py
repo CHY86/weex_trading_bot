@@ -261,9 +261,9 @@ class StrategyManager:
         bb_upper = df.get(self._get_bbu_col_name(self.history_df), None)
         bb_lower_cols = [c for c in self.history_df.columns if str(c).startswith('BBL_')]
         bb_lower = df[bb_lower_cols[0]] if bb_lower_cols else None
-        bb_mid = df.get('BBM_' + str(config.BB_LENGTH) + '_' + str(config.BB_STD) + '.0', None)
+        bb_mid_cols = [c for c in df.columns if str(c).startswith('BBM_')]
+        bb_mid = df[bb_mid_cols[0]] if bb_mid_cols else None
 
-        print(f"is_range_market debug: bb_upper={bb_upper}, bb_lower={bb_lower}, bb_mid={bb_mid}")
         if not bb_upper or not bb_lower or not bb_mid:
             print("⚠️ 無法取得布林通道數據以判斷盤整區間")
             return False
