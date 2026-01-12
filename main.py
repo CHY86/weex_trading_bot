@@ -92,7 +92,7 @@ class StrategyManager:
         system_prompt = """
         你是一位在加密貨幣市場擁有 20 年經驗的資深量化交易員。
         你擅長識別價格行為 (Price Action)、K線型態 (Candlestick Patterns) 與假突破 (Fakeouts)。
-        你的任務是根據提供的歷史數據與當前快照，判斷是否進行「做空 (SHORT)」操作。
+        你的任務是根據提供的歷史數據與當前快照，判斷是否進行「做多 (LONG)」操作。
         """
 
         user_prompt = f"""
@@ -112,7 +112,7 @@ class StrategyManager:
         3. 判斷布林通道：價格是否過度偏離上軌 (Mean Reversion 機會)？
         
         請以 JSON 格式回傳決策：
-        - "action": "SHORT" (建議做空) 或 "WAIT" (風險過高或訊號不明)
+        - "action": "LONG" (建議做多) 或 "WAIT" (風險過高或訊號不明)
         - "confidence": 0.0 ~ 1.0 (信心分數)
         - "explanation": 100字以內的中文分析。**請不要只報數字**，請描述你看到的結構（例如：「連續三根紅K後出現十字星，且RSI高檔鈍化，顯示多頭力竭...」）。
         """
@@ -133,6 +133,31 @@ class StrategyManager:
             
             # 解析並列印 AI 回覆
             ai_decision = json.loads(clean_json)
+
+            # 上傳 AI Log (如果啟用)
+            self.client.upload_ai_log(
+                stage="Strategy Generation",
+                model=config.OPENAI_MODEL,
+                input_data={
+                    "prompt": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                    "market_snapshot": {
+                        "price": market_data['price'],
+                        "rsi": market_data['rsi'],
+                        "bb_upper": market_data['bb_upper'],
+                        "historical_klines": history_str
+                    }
+                },
+                output_data={
+                    "action": ai_decision["action"],
+                    "confidence": ai_decision["confidence"],
+                    "explanation": ai_decision["explanation"]
+                },
+                explanation=ai_decision["explanation"]
+            )
+
             print(f"🤖 [AI 深度分析] {json.dumps(ai_decision, ensure_ascii=False)}")
             
             return ai_decision
@@ -272,41 +297,21 @@ class StrategyManager:
             # 2. AI 最終決策
             ai_res = self.consult_ai_agent({"price": current_price, "rsi": real_time_rsi, "bb_upper": bb_upper})
             
-            if ai_res["action"] == "SHORT" and ai_res["confidence"] >= config.AI_CONFIDENCE_THRESHOLD:
-                self.execute_trade_logic(current_price, "SHORT", ai_res["explanation"], real_time_rsi)
+            if ai_res["action"] == "LONG" and ai_res["confidence"] >= config.AI_CONFIDENCE_THRESHOLD:
+                print(f"   - 當前價格: {current_price}, RSI: {real_time_rsi:.2f}, BB上軌: {bb_upper:.2f}")
+                print(f"✅ 條件符合且 AI 建議做多，準備下單...")
+                print(f"   - AI 分析: {ai_res['explanation']}")
+                
+                # 2. 執行下單
+                self.execute_trade(price=current_price)
 
-    def execute_trade(self, price, direction, reason, rsi, bb_up, history_context):
-        print(f"⚡ 下單訊號: {direction} @ {price} | {reason}")
-        
-        # [更新] 將完整的歷史上下文寫入 Log input_data
-        self.client.upload_ai_log(
-            stage="Strategy Generation",
-            model=config.OPENAI_MODEL,
-            input_data={
-                "price": price, 
-                "rsi": rsi, 
-                "bb_upper": bb_up, 
-                "history_context": history_context  # 記錄給 AI 的那 30 筆 K 線
-            },
-            output_data={"decision": direction},
-            explanation=reason
-        )
-        
-        tp = str(int(price * 0.985))
-        sl = str(int(price * 1.02))
+    def execute_trade(self, price):
+        tp = str(int(price * 1.02))
+        sl = str(int(price * 0.985))
+
         try:
-            order = self.client.place_order(side=2, size="0.01", match_price="1", 
+            self.client.place_order(side=1, size="0.01", match_price="1", 
                                           preset_take_profit=tp, preset_stop_loss=sl, margin_mode=1)
-            if order and order.get('data'):
-                self.last_trade_time = datetime.now()
-                oid = order['data']['orderId']
-                print(f"✅ 下單成功: {oid}")
-                self.client.upload_ai_log(
-                    stage="Execution", model=config.OPENAI_MODEL,
-                    input_data={"order": "MARKET SHORT", "history_at_execution": history_context}, 
-                    output_data=order,
-                    explanation=f"Executed by AI: {reason}", order_id=oid
-                )
         except Exception as e:
             print(f"❌ 下單失敗: {e}")
             

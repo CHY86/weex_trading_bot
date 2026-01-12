@@ -249,6 +249,82 @@ class WeexClient:
     # --- 交易執行 (保持不變) ---
     def place_order(self, side, size, price=None, match_price="0", order_type="0", 
                     client_oid=None, preset_take_profit=None, preset_stop_loss=None, margin_mode=None, extra_params=None):
+        """
+    Place a futures order on WEEX exchange.
+
+    此方法用於在 WEEX 合約交易市場下單，支援市價 / 限價、
+    多空開倉與平倉，並可預設止盈止損。
+
+    Parameters
+    ----------
+    symbol : str
+        交易對，例如 "cmt_bchusdt"。
+
+    client_oid : str
+        自訂訂單 ID，由客戶端生成。
+        - 長度不可超過 40 字元
+        - 建議用於策略追蹤與冪等控制（避免重複下單）
+
+    size : str
+        下單數量（基礎幣數量）。
+        - 小數位數需符合交易所規範
+        - 可透過「Get Futures Information」查詢精度
+
+    side : str
+        下單方向 / 動作類型：
+        - "1"：開多（Open Long）
+        - "2"：開空（Open Short）
+        - "3"：平多（Close Long）
+        - "4"：平空（Close Short）
+
+    order_type : str
+        訂單執行方式：
+        - "0"：普通委託（Normal）
+        - "1"：只掛單（Post-Only）
+        - "2"：完全成交否則取消（Fill-Or-Kill）
+        - "3"：立即成交否則取消（IOC）
+
+    match_price : str
+        是否使用市價：
+        - "0"：限價單（Limit Order）
+        - "1"：市價單（Market Order）
+
+    price : str, optional
+        委託價格。
+        - **僅限價單（match_price="0"）必填**
+        - 價格精度與最小變動單位需符合交易所規範
+
+    preset_take_profit : str, optional
+        預設止盈價格（Take Profit）。
+        - 若提供，訂單成交後會自動設置止盈
+
+    preset_stop_loss : str, optional
+        預設止損價格（Stop Loss）。
+        - 若提供，訂單成交後會自動設置止損
+
+    margin_mode : int, optional
+        保證金模式：
+        - 1：全倉模式（Cross Margin）
+        - 3：逐倉模式（Isolated Margin）
+        - 預設為 1（全倉）
+
+    Returns
+    -------
+    dict
+        下單結果，包含：
+        - client_oid : str
+            客戶端自訂訂單 ID
+        - order_id : str
+            交易所產生的訂單 ID
+
+    Notes
+    -----
+    - API Endpoint: POST /capi/v2/order/placeOrder
+    - Weight(IP): 2
+    - Weight(UID): 5
+    - 建議搭配風控與冷卻機制使用，避免頻繁下單導致限制
+    """
+        
         endpoint = "/capi/v2/order/placeOrder"
         client_oid = client_oid or self.id_gen.generate()
         if str(match_price) == "0" and not price:
