@@ -279,7 +279,7 @@ class StrategyManager:
 
         # --- 策略邏輯 ---
         is_valid_breakout = current_price > self.prev_high * 1.001  # 假突破過濾
-        is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
+        is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper * 1.001)
         
         if is_valid_breakout and is_overextended:
             # 1. 風控檢查 (新增)
