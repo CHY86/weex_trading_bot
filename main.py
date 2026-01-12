@@ -264,6 +264,7 @@ class StrategyManager:
         bb_mid = df.get('BBM_' + str(config.BB_LENGTH) + '_' + str(config.BB_STD) + '.0', None)
 
         if not bb_upper or not bb_lower or not bb_mid:
+            print("⚠️ 無法取得布林通道數據以判斷盤整區間")
             return False
 
         bb_width = (bb_upper - bb_lower) / bb_mid
@@ -295,7 +296,7 @@ class StrategyManager:
         if interval != "MINUTE_1": 
             return
         now = datetime.now()
-        print("1")
+
         # 冷卻時間檢查
         if (now - self.last_trade_time).total_seconds() < config.COOLDOWN_HOURS * 3600:
             return 
@@ -303,7 +304,7 @@ class StrategyManager:
         if self.history_df.empty:
             return
         
-        print("2")
+
         # --- 計算即時 RSI ---
         closes = self.history_df['close'].copy()
         temp_series = pd.concat([closes, pd.Series([current_price])], ignore_index=True)
@@ -313,7 +314,7 @@ class StrategyManager:
             return
             
         real_time_rsi = rsi_series.iloc[-1]
-        print("3")
+
 
 
         # --- 策略邏輯 ---
