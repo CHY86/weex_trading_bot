@@ -292,6 +292,8 @@ class StrategyManager:
 
 
     def on_tick(self, interval, current_price):
+        print("--- on_tick debug ---")
+        print(f"收到行情更新: interval={interval}, current_price={current_price}")
         if interval != "MINUTE_1": 
             return
             
