@@ -261,7 +261,7 @@ class StrategyManager:
         bb_upper = df.get(self._get_bbu_col_name(self.history_df), None)
         bb_lower_cols = [c for c in self.history_df.columns if str(c).startswith('BBL_')]
         bb_lower = df[bb_lower_cols[0]] if bb_lower_cols else None
-        bb_mid_cols = [c for c in df.columns if str(c).startswith('BBM_')]
+        bb_mid_cols = [c for c in self.history_df.columns if str(c).startswith('BBM_')]
         bb_mid = df[bb_mid_cols[0]] if bb_mid_cols else None
 
         if not bb_upper or not bb_lower or not bb_mid:
