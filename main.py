@@ -278,10 +278,10 @@ class StrategyManager:
         bb_upper = self.history_df.iloc[-1].get(bb_upper_col, 999999)
 
         # --- 策略邏輯 ---
-        is_breakout = current_price > self.prev_high
+        is_valid_breakout = current_price > self.prev_high * 1.001  # 假突破過濾
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper)
         
-        if is_breakout and is_overextended:
+        if is_valid_breakout and is_overextended:
             # 1. 風控檢查 (新增)
             if not self.check_risk_limits(): return
 
