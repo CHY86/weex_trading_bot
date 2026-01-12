@@ -250,6 +250,47 @@ class StrategyManager:
             
             print(f"📊 [{STRATEGY_INTERVAL}] 策略基準 (取idx {idx_used}, K線時間{kline_time_str}): {SYMBOL} 前高={self.prev_high}, RSI={rsi_val:.2f} (閥值:{config.RSI_OVERBOUGHT}), BB上軌={bb_upper_val:.2f}")
 
+
+    def is_range_market(self):
+        """判斷目前市場是否處於盤整區間 (布林通道寬度小於 5%)"""
+        if self.history_df.empty:
+            return False
+
+        df = self.history_df.iloc[-1]
+
+        bb_upper = df.get(self._get_bbu_col_name(self.history_df), None)
+        bb_lower_cols = [c for c in self.history_df.columns if str(c).startswith('BBL_')]
+        bb_lower = df[bb_lower_cols[0]] if bb_lower_cols else None
+        bb_mid = df.get('BBM_' + str(config.BB_LENGTH) + '_' + str(config.BB_STD) + '.0', None)
+
+        if not bb_upper or not bb_lower or not bb_mid:
+            return False
+
+        bb_width = (bb_upper - bb_lower) / bb_mid
+        print("is_range_market debug:")
+        print("bb_upper:", bb_upper, "bb_lower:", bb_lower, "bb_mid:", bb_mid, "bb_width:", bb_width,"是否為盤整區間:", bb_width < 0.05)
+        return bb_width < 0.05
+    
+    def check_range_reversion(self, price, real_time_rsi):
+        """判斷是否符合盤整區間反轉進場條件"""
+        df = self.history_df.iloc[-1]
+
+        # 取得 BB 下軌
+        bb_lower_cols = [c for c in self.history_df.columns if str(c).startswith('BBL_')]
+        if not bb_lower_cols:
+            return False
+        bb_lower = df[bb_lower_cols[0]]
+
+        # 條件 1：價格接近下軌但未有效跌破
+        near_lower_band = bb_lower < price < bb_lower * 1.005
+
+        # 條件 2：RSI 已低於中性區，且開始回升
+        rsi_recovering = real_time_rsi > 40
+        print("check_range_reversion debug:")
+        print(f"price={price}, bb_lower={bb_lower}, near_lower_band={near_lower_band}, real_time_rsi={real_time_rsi}, rsi_recovering={rsi_recovering}, 是否符合反轉條件:", near_lower_band and rsi_recovering)
+        return near_lower_band and rsi_recovering
+
+
     def on_tick(self, interval, current_price):
         if interval != "MINUTE_1": 
             return
@@ -273,11 +314,26 @@ class StrategyManager:
             
         real_time_rsi = rsi_series.iloc[-1]
 
+
+
+        # --- 策略邏輯 ---
+        # 判斷市場狀態
+        is_range = self.is_range_market()
+
+        # --- 1. 區間盤：抄底策略 ---
+        if is_range:
+            if self.check_range_reversion(current_price, real_time_rsi):
+                if not self.check_risk_limits():
+                    return
+
+                print("📉 區間盤抄底訊號成立，執行回歸交易")
+                self.execute_trade(price=current_price)
+                return
+
+        # --- 2. 趨勢盤：假突破做多策略 ---
         # 取得布林通道上軌
         bb_upper_col = f'BBU_{config.BB_LENGTH}_{config.BB_STD}.0'
         bb_upper = self.history_df.iloc[-1].get(bb_upper_col, 999999)
-
-        # --- 策略邏輯 ---
         is_valid_breakout = current_price > self.prev_high * 1.001  # 假突破過濾
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper * 1.001)
         
