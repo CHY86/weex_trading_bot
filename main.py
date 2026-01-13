@@ -9,6 +9,10 @@ from market_stream import MarketStream
 import config
 from ai_logger import save_local_log
 
+DECISION_AI = "AI_ASSISTED"
+DECISION_RULE = "RULE_BASED"
+
+
 # 初始化 OpenAI Client
 ai_client = OpenAI(api_key=config.OPENAI_API_KEY)
 
@@ -136,7 +140,7 @@ class StrategyManager:
 
             # 上傳 AI Log (如果啟用)
             self.client.upload_ai_log(
-                stage="Strategy Generation",
+                stage="Decision Making",
                 model=config.OPENAI_MODEL,
                 input_data={
                     "prompt": [
@@ -329,7 +333,15 @@ class StrategyManager:
                     return
 
                 print("📉 區間盤抄底訊號成立，執行回歸交易")
-                self.execute_trade(price=current_price)
+                self.execute_trade_with_decision(
+                price=current_price,
+                decision_source=DECISION_RULE,
+                strategy_name="range_reversion",
+                extra_context={
+                    "rsi": real_time_rsi,
+                    "market_regime": "range"
+                }
+                )
                 return
 
         # --- 2. 趨勢盤：假突破做多策略 ---
@@ -361,7 +373,67 @@ class StrategyManager:
                 print(f"   - AI 分析: {ai_res['explanation']}")
                 
                 # 2. 執行下單
-                self.execute_trade(price=current_price)
+                self.execute_trade_with_decision(
+                price=current_price,
+                decision_source=DECISION_AI,
+                strategy_name="breakout_momentum_ai",
+                extra_context={
+                    "prev_high": self.prev_high,
+                    "rsi": real_time_rsi,
+                    "bb_upper": bb_upper,
+                    "ai_confidence": ai_res["confidence"]
+                }
+            )
+
+    def execute_trade_with_decision(
+    self,
+    price,
+    decision_source,
+    strategy_name,
+    extra_context=None
+    ):
+        """
+        統一交易執行入口，並記錄決策來源（AI / 規則）
+        """
+
+        # === 1. 下單（沿用原本的 execute_trade 內容） ===
+        order_result = self.execute_trade(price=price)
+
+        if not order_result:
+            return None
+
+        order_id = order_result.get("order_id") \
+            if isinstance(order_result, dict) else None
+
+        # === 2. 統一寫本機決策 log（不管 AI / 非 AI） ===
+        log_payload = {
+            "strategy": strategy_name,
+            "decision_source": decision_source,
+            "symbol": config.SYMBOL,
+            "price": price,
+            "timestamp": int(time.time() * 1000)
+        }
+
+        if extra_context:
+            log_payload["context"] = extra_context
+
+        save_local_log(
+            stage="Trade Execution",
+            model=decision_source,
+            input_data=log_payload,
+            output_data={
+                "order_id": order_id,
+                "action": "OPEN_LONG"
+            },
+            explanation=(
+                "Trade executed automatically based on AI-assisted decision."
+                if decision_source == DECISION_AI
+                else
+                "Trade executed automatically based on predefined rule-based strategy."
+            )
+        )
+
+        return order_result
 
     def execute_trade(self, price):
         tp = str(int(price * 1.02))
