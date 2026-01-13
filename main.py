@@ -273,8 +273,8 @@ class StrategyManager:
             return False
 
         bb_width = (bb_upper - bb_lower) / bb_mid
-        print("is_range_market debug:")
-        print("bb_upper:", bb_upper, "bb_lower:", bb_lower, "bb_mid:", bb_mid, "bb_width:", bb_width,"是否為盤整區間:", bb_width < 0.05)
+        #print("is_range_market debug:")
+        #print("bb_upper:", bb_upper, "bb_lower:", bb_lower, "bb_mid:", bb_mid, "bb_width:", bb_width,"是否為盤整區間:", bb_width < 0.05)
         return bb_width < 0.05
     
     def check_range_reversion(self, price, real_time_rsi):
@@ -292,8 +292,8 @@ class StrategyManager:
 
         # 條件 2：RSI 已低於中性區，且開始回升
         rsi_recovering = real_time_rsi > 40
-        print("check_range_reversion debug:")
-        print(f"price={price}, bb_lower={bb_lower}, near_lower_band={near_lower_band}, real_time_rsi={real_time_rsi}, rsi_recovering={rsi_recovering}, 是否符合反轉條件:", near_lower_band and rsi_recovering)
+        #print("check_range_reversion debug:")
+        #print(f"price={price}, bb_lower={bb_lower}, near_lower_band={near_lower_band}, real_time_rsi={real_time_rsi}, rsi_recovering={rsi_recovering}, 是否符合反轉條件:", near_lower_band and rsi_recovering)
         return near_lower_band and rsi_recovering
 
 
