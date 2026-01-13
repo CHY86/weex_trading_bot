@@ -40,11 +40,11 @@ class StrategyManager:
             return False
 
         # 2. 檢查持倉數量
-        # positions = self.client.get_all_positions(config.SYMBOL)
-        # valid_positions = [p for p in positions if float(p.get('hold_vol', 0) or p.get('size', 0)) > 0]
-        # if len(valid_positions) >= config.MAX_POSITIONS:
-        #     print(f"🚫 [風控攔截] 已有倉位 ({len(valid_positions)} 個)，停止下單。")
-        #     return False
+        positions = self.client.get_all_positions(config.SYMBOL)
+        valid_positions = [p for p in positions if float(p.get('hold_vol', 0) or p.get('size', 0)) > 0]
+        if len(valid_positions) >= config.MAX_POSITIONS:
+            print(f"🚫 [風控攔截] 已有倉位 ({len(valid_positions)} 個)，停止下單。")
+            return False
             
         return True
 
