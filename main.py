@@ -440,7 +440,7 @@ class StrategyManager:
         sl = str(int(price * 0.985))
 
         try:
-            self.client.place_order(side=1, size="0.01", match_price="1", 
+            self.client.place_order(side=1, size="0.02", match_price="1", 
                                           preset_take_profit=tp, preset_stop_loss=sl, margin_mode=1)
         except Exception as e:
             print(f"❌ 下單失敗: {e}")
