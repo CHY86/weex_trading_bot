@@ -517,7 +517,7 @@ if __name__ == "__main__":
                 if bb_col:
                     current_bb_upper = bb_df.iloc[-1][bb_col]
 
-            print(f"💓 [監控中] {SYMBOL} {config.STRATEGY_INTERVAL} | 現價: {price} | RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT}) | BB上軌: {current_bb_upper:.2f}")            
+            print(f"💓 [監控中] {SYMBOL} {config.STRATEGY_INTERVAL} | 現價: {price} | 前高: {strategy.prev_high} | RSI: {current_rsi:.2f} (閥值:{config.RSI_OVERBOUGHT}) | BB上軌: {current_bb_upper:.2f}")            
             last_heartbeat_time = time.time()
 
         if should_refresh_data(last_update_time):
