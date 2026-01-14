@@ -363,10 +363,11 @@ class StrategyManager:
             # 1. 風控檢查 (新增)
             if not self.check_risk_limits(): return
 
-            # [新增] AI API 頻率限制 (解決 429 錯誤)
-            # 限制每 20 秒最多呼叫一次
-            if (time.time() - self.last_ai_req_time) < config.AI_COOLDOWN_SECONDS:
-                print(f"⏳ 條件成立但 AI 冷卻中，冷卻時間: {config.AI_COOLDOWN_SECONDS} 秒 (避免 Rate Limit)...")
+            # [新增] AI API 頻率限制
+            # 限制每 xx 秒最多呼叫一次(config.AI_COOLDOWN_SECONDS)
+            seconds_since_last_call = time.time() - self.last_ai_req_time
+            if seconds_since_last_call < config.AI_COOLDOWN_SECONDS:
+                print(f"⏳ 條件成立但 AI 冷卻中，冷卻時間: {seconds_since_last_call} 秒 (避免 Rate Limit)...")
                 return
             
             # 更新 API 呼叫時間
