@@ -136,8 +136,8 @@ class StrategyManager:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.6, # 稍微降低隨機性，讓分析更專注
-                max_tokens=300
+                temperature=0.4, # 稍微降低隨機性，讓分析更專注
+                max_tokens=400
             )
             
             content = response.choices[0].message.content
