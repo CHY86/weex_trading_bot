@@ -346,8 +346,8 @@ class StrategyManager:
 
         # --- 2. 趨勢盤：假突破做多策略 ---
         # 取得布林通道上軌
-        bb_upper_col = f'BBU_{config.BB_LENGTH}_{config.BB_STD}.0'
-        bb_upper = self.history_df.iloc[-1].get(bb_upper_col, 999999)
+        df_last = self.history_df.iloc[-1]
+        bb_upper = df_last.get(self._get_bbu_col_name(self.history_df), 999999)
         is_valid_breakout = current_price > self.prev_high * 1.001  # 假突破過濾
         is_overextended = (real_time_rsi > config.RSI_OVERBOUGHT) or (current_price > bb_upper * 1.001)
         
