@@ -23,6 +23,10 @@ STRATEGY_INTERVAL = config.STRATEGY_INTERVAL
 # 始終訂閱 MINUTE_1 (監控用) + 策略設定的週期 (分析用)
 INTERVALS = ["MINUTE_1", STRATEGY_INTERVAL] 
 
+
+AI_TEMPERATURE = 0.4 if config.AI_TEMPERATURE is None else config.AI_TEMPERATURE
+AI_MAX_TOKENS = 400 if config.AI_MAX_TOKENS is None else config.AI_MAX_TOKENS
+
 class StrategyManager:
     def __init__(self, client):
         self.client = client
@@ -136,8 +140,8 @@ class StrategyManager:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.4, # 稍微降低隨機性，讓分析更專注
-                max_tokens=400
+                temperature=AI_TEMPERATURE,
+                max_tokens=AI_MAX_TOKENS
             )
             
             content = response.choices[0].message.content

@@ -36,6 +36,8 @@ OPENAI_MODEL = "gpt-4o-mini-2024-07-18" # 使用 Group 2 的高額度模型
 # AI 
 AI_CONFIDENCE_THRESHOLD = 0.6
 AI_COOLDOWN_SECONDS = 60
+AI_TEMPERATURE = 0.4  # 控制回應的隨機性 (0.0 - 1.0
+AI_MAX_TOKENS = 400   # 回應的最大 token 數量
 
 # 風控設定 (保留)
 MAX_OPEN_ORDERS = 10
