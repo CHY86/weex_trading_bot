@@ -65,7 +65,7 @@ class StrategyManager:
             return cols[0] # 回傳找到的第一個
         return None
 
-    def normalize_prompt(s: str) -> str:
+    def normalize_prompt(self, s: str) -> str:
         return (
             s
             .replace("\r", "\\r")
