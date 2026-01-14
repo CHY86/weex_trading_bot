@@ -65,10 +65,16 @@ class StrategyManager:
             return cols[0] # 回傳找到的第一個
         return None
 
+    def normalize_prompt(s: str) -> str:
+        return (
+            s
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t")
+        )
+
     def consult_ai_agent(self, market_data):
         """諮詢 OpenAI GPT-4o-mini (傳入歷史 K 線增強分析深度)"""
-        if not config.ENABLE_AI_DECISION:
-            return {"action": "GO", "confidence": 1.0, "explanation": "Manual logic"}
 
         # 1. 準備最近 30 筆 K 線數據
         try:
@@ -86,7 +92,7 @@ class StrategyManager:
             cols_to_show = ['time_str', 'open', 'high', 'low', 'close', 'RSI', bb_col]
             
             # 轉為字串表格 (類似 CSV 格式)
-            history_str = recent_df[cols_to_show].to_string(index=False)
+            history_str = recent_df[cols_to_show].to_dict(orient="records")
             
         except Exception as e:
             print(f"⚠️ 數據整理失敗: {e}")
@@ -113,13 +119,15 @@ class StrategyManager:
         【分析要求】
         1. 觀察最近的價格趨勢：是急漲、緩漲還是高檔震盪？
         2. 尋找疲弱訊號：是否有長上影線 (Wicks)、吞噬形態 (Engulfing) 或 RSI 背離？
-        3. 判斷布林通道：價格是否過度偏離上軌 (Mean Reversion 機會)？
+        3. 判斷布林通道：價格是否過度偏離上軌 (Mean Reversion 機會)?
         
         請以 JSON 格式回傳決策：
         - "action": "LONG" (建議做多) 或 "WAIT" (風險過高或訊號不明)
         - "confidence": 0.0 ~ 1.0 (信心分數)
-        - "explanation": 100字以內的中文分析。**請不要只報數字**，請描述你看到的結構（例如：「連續三根紅K後出現十字星，且RSI高檔鈍化，顯示多頭力竭...」）。
+        - "explanation": 100字以內的中文分析。**請不要只報數字**,請描述你看到的結構(例如:「連續三根紅K後出現十字星,且RSI高檔鈍化,顯示多頭力竭...」）。
         """
+        system_prompt = self.normalize_prompt(system_prompt)
+        user_prompt = self.normalize_prompt(user_prompt)
 
         try:
             response = ai_client.chat.completions.create(

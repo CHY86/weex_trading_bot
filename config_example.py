@@ -33,8 +33,7 @@ ENABLE_AI_LOG = True  # 是否上傳 AI Log
 OPENAI_API_KEY = "您的_OPENAI_API_KEY"  # 請填入您的 sk-....
 OPENAI_MODEL = "gpt-4o-mini-2024-07-18" # 使用 Group 2 的高額度模型
 
-# AI 決策開關
-ENABLE_AI_DECISION = True
+# AI 
 AI_CONFIDENCE_THRESHOLD = 0.6
 
 # 風控設定 (保留)
