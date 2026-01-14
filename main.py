@@ -367,7 +367,7 @@ class StrategyManager:
             # 限制每 xx 秒最多呼叫一次(config.AI_COOLDOWN_SECONDS)
             seconds_since_last_call = time.time() - self.last_ai_req_time
             if seconds_since_last_call < config.AI_COOLDOWN_SECONDS:
-                print(f"⏳ 條件成立但 AI 冷卻中，冷卻時間: {seconds_since_last_call} 秒 (避免 Rate Limit)...")
+                print(f"⏳ 條件成立但 AI 冷卻中，冷卻倒數: {config.AI_COOLDOWN_SECONDS - seconds_since_last_call} 秒 (避免 Rate Limit)...")
                 return
             
             # 更新 API 呼叫時間
