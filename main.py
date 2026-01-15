@@ -408,9 +408,12 @@ class StrategyManager:
         """
         統一交易執行入口，並記錄決策來源（AI / 規則）
         """
-
+        size = config.ORDER_SIZE_BY_STRATEGY.get(
+        strategy_name,
+        config.DEFAULT_ORDER_SIZE
+    )
         # === 1. 下單（沿用原本的 execute_trade 內容） ===
-        order_result = self.execute_trade(price=price)
+        order_result = self.execute_trade(price=price, size=size)
 
         if not order_result:
             return None
@@ -448,12 +451,12 @@ class StrategyManager:
 
         return order_result
 
-    def execute_trade(self, price):
+    def execute_trade(self, price, size):
         tp = str(int(price * 1.02))
         sl = str(int(price * 0.985))
 
         try:
-            self.client.place_order(side=1, size="0.02", match_price="1", 
+            self.client.place_order(side=1, size=size, match_price="1",
                                           preset_take_profit=tp, preset_stop_loss=sl, margin_mode=1)
         except Exception as e:
             print(f"❌ 下單失敗: {e}")

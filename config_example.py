@@ -31,7 +31,7 @@ ENABLE_AI_LOG = True  # 是否上傳 AI Log
 
 #  OpenAI 設定 ---
 OPENAI_API_KEY = "您的_OPENAI_API_KEY"  # 請填入您的 sk-....
-OPENAI_MODEL = "gpt-4o-mini-2024-07-18" # 使用 Group 2 的高額度模型
+OPENAI_MODEL = "gpt-4.1-mini-2025-04-14" # 使用 Group 2 的高額度模型
 
 # AI 
 AI_CONFIDENCE_THRESHOLD = 0.6
@@ -43,3 +43,8 @@ AI_MAX_TOKENS = 400   # 回應的最大 token 數量
 MAX_OPEN_ORDERS = 10
 MAX_POSITIONS = 1
 MAX_POSITION_SIZE = 1  # 最大持倉數量 (例如最多持有 0.1 BTC)
+DEFAULT_ORDER_SIZE = "0.05"  # 預設下單數量
+ORDER_SIZE_BY_STRATEGY = {
+    "range_reversion": "0.04",
+    "breakout_momentum_ai": "0.05",
+}
