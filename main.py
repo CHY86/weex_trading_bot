@@ -54,8 +54,23 @@ class StrategyManager:
             print(f"🚫 [風控攔截] 已有倉位 ({len(valid_positions)} 個)，停止下單。")
             return False
             
-        return True
+        # 3. 持倉 size
+        total_position_size = 0.0
 
+        for p in positions:
+            size = float(p.get('hold_vol') or p.get('size') or 0)
+            if size > 0:
+                total_position_size += size    
+        
+            # 3. 【新增】總持倉 size 上限
+        if total_position_size >= config.MAX_POSITION_SIZE:
+            print(
+                f"🚫 [風控攔截] 總持倉 size 過大 "
+                f"({total_position_size:.4f} >= {config.MAX_POSITION_SIZE})，停止下單。"
+            )
+            return False
+        return True
+    
     # --- 動態取得布林上軌欄位名 ---
     def _get_bbu_col_name(self, df):
         """
