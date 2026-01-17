@@ -48,3 +48,22 @@ ORDER_SIZE_BY_STRATEGY = {
     "range_reversion": "0.04",
     "breakout_momentum_ai": "0.05",
 }
+
+# 預設止損止盈
+DEFAULT_TAKE_PROFIT_PCT = 0.02    # +2%
+DEFAULT_STOP_LOSS_PCT   = 0.015    # -1.5%
+
+# 各策略獨立設定
+TP_SL_BY_STRATEGY = {
+    # 區間單：勝率高、但空間小 → 小TP、小SL
+    "range_reversion": {
+        "tp": 0.008,   # +0.8%
+        "sl": 0.006    # -0.6%
+    },
+
+    # 突破單：低勝率、高期望 → 大TP、較寬SL
+    "breakout_momentum_ai": {
+        "tp": 0.03,    # +3%
+        "sl": 0.015    # -1.5%
+    }
+}

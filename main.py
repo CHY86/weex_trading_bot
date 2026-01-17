@@ -428,7 +428,7 @@ class StrategyManager:
         config.DEFAULT_ORDER_SIZE
     )
         # === 1. 下單（沿用原本的 execute_trade 內容） ===
-        order_result = self.execute_trade(price=price, size=size)
+        order_result = self.execute_trade(price=price, size=size, strategy_name=strategy_name)
 
         if not order_result:
             return None
@@ -466,13 +466,29 @@ class StrategyManager:
 
         return order_result
 
-    def execute_trade(self, price, size):
-        tp = str(int(price * 1.02))
-        sl = str(int(price * 0.985))
+    def execute_trade(self, price, size, strategy_name):
+        # 從 config 取得該策略 TP/SL
+        cfg = config.TP_SL_BY_STRATEGY.get(strategy_name, {})
+        tp_pct = cfg.get("tp", config.DEFAULT_TAKE_PROFIT_PCT)
+        sl_pct = cfg.get("sl", config.DEFAULT_STOP_LOSS_PCT)
+
+        tp_price = round(price * (1 + tp_pct), 2)
+        sl_price = round(price * (1 - sl_pct), 2)
 
         try:
-            self.client.place_order(side=1, size=size, match_price="1",
-                                          preset_take_profit=tp, preset_stop_loss=sl, margin_mode=1)
+            self.client.place_order(
+                side=1,
+                size=size,
+                match_price="1",
+                preset_take_profit=str(tp_price),
+                preset_stop_loss=str(sl_price),
+                margin_mode=1
+            )
+            print(
+                f"🛡️ 下單完成 | strategy={strategy_name} "
+                f"TP={tp_price} ({tp_pct*100:.2f}%) "
+                f"SL={sl_price} ({sl_pct*100:.2f}%)"
+            )
         except Exception as e:
             print(f"❌ 下單失敗: {e}")
             
